@@ -1,24 +1,19 @@
+"""Race finish prediction: gain model (finish - grid) vs direct model (absolute
+finish), baselined against grid order. Shared machinery lives in f1_common.py.
+"""
+
 import argparse
-import warnings
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
 import fastf1
-from sklearn.ensemble import HistGradientBoostingRegressor
-from sklearn.inspection import permutation_importance
 
-warnings.filterwarnings("ignore")
+import f1_common as common
 
-BASE_DIR = Path(__file__).resolve().parent
-CACHE_DIR = BASE_DIR / "cache"
-DATA_DIR = BASE_DIR / "data"
+MIN_TRAIN_ROUNDS = common.MIN_TRAIN_ROUNDS
 
-MIN_TRAIN_ROUNDS = 5
-STINT_WINDOW = 5
-STINT_MIN_LAPS = 3
-COMPLETION_BUFFER = timedelta(hours=3)
+PRACTICE_SESSIONS = ("FP1", "FP2", "FP3")
 
 PRACTICE_COLS = ["fp_race_pace_delta", "fp_best_delta", "fp_laps"]
 SPRINT_COLS = ["sprint_quali_pos", "sprint_finish", "sprint_gain"]
@@ -56,47 +51,9 @@ RAW_COLUMNS = [
     "status",
 ] + PRACTICE_COLS + SPRINT_COLS
 
-
-def setup():
-    CACHE_DIR.mkdir(exist_ok=True)
-    DATA_DIR.mkdir(exist_ok=True)
-    fastf1.Cache.enable_cache(str(CACHE_DIR))
-    try:
-        fastf1.logger.set_log_level("WARNING")
-    except Exception:
-        pass
-
-
-def utc_now():
-    return pd.Timestamp(datetime.now(timezone.utc)).replace(tzinfo=None)
-
-
-def session_utc(row, name):
-    for i in range(1, 6):
-        if row.get(f"Session{i}") == name:
-            value = row.get(f"Session{i}DateUtc")
-            if pd.isna(value):
-                return None
-            return pd.Timestamp(value)
-    return None
-
-
-def best_quali_seconds(qres, num):
-    if num not in qres.index:
-        return np.nan
-    times = []
-    for col in ("Q1", "Q2", "Q3"):
-        if col in qres.columns:
-            value = qres.at[num, col]
-            if pd.notna(value):
-                times.append(pd.Timedelta(value).total_seconds())
-    return min(times) if times else np.nan
-
-
-def pole_seconds(qres):
-    times = [best_quali_seconds(qres, num) for num in qres.index]
-    times = [t for t in times if not np.isnan(t)]
-    return min(times) if times else np.nan
+setup = common.setup
+utc_now = common.utc_now
+session_utc = common.session_utc
 
 
 def _row_from_result(res, num, round_number, event_name):
@@ -119,67 +76,6 @@ def _row_from_result(res, num, round_number, event_name):
         "points": points,
         "status": str(row["Status"]),
     }
-
-
-def _clean_practice_laps(session):
-    laps = session.laps
-    if laps is None or laps.empty:
-        return pd.DataFrame()
-    clean = laps[
-        laps["LapTime"].notna()
-        & laps["IsAccurate"].fillna(False)
-        & laps["PitInTime"].isna()
-        & laps["PitOutTime"].isna()
-        & (laps["TrackStatus"].astype(str) == "1")
-    ][["DriverNumber", "Stint", "LapNumber", "LapTime"]].copy()
-    if clean.empty:
-        return clean
-    clean["DriverNumber"] = clean["DriverNumber"].astype(str)
-    clean["seconds"] = clean["LapTime"].dt.total_seconds()
-    return clean
-
-
-def _practice_session_frame(session):
-    clean = _clean_practice_laps(session)
-    if clean.empty:
-        return None
-    best_lap = clean.groupby("DriverNumber")["seconds"].min()
-    stint_best = {}
-    for (num, _), group in clean.groupby(["DriverNumber", "Stint"]):
-        if len(group) < STINT_MIN_LAPS:
-            continue
-        group = group.sort_values("LapNumber")
-        pace = group["seconds"].rolling(STINT_WINDOW, min_periods=STINT_MIN_LAPS).mean().min()
-        stint_best[num] = min(stint_best.get(num, np.inf), pace)
-    if len(stint_best) < 3:
-        return None
-    stint = pd.Series(stint_best)
-    return pd.DataFrame({
-        "fp_best_delta": best_lap - best_lap.min(),
-        "fp_laps": clean.groupby("DriverNumber").size(),
-        "fp_race_pace_delta": stint - stint.min(),
-    })
-
-
-def practice_features(year, round_number):
-    frames = []
-    for identifier in ("FP1", "FP2", "FP3"):
-        try:
-            session = fastf1.get_session(year, round_number, identifier)
-            session.load(laps=True, telemetry=False, weather=False, messages=False)
-            frame = _practice_session_frame(session)
-        except Exception:
-            frame = None
-        if frame is not None:
-            frames.append(frame)
-    if not frames:
-        return pd.DataFrame()
-    combined = pd.concat(frames)
-    return combined.groupby(level=0).agg(
-        fp_race_pace_delta=("fp_race_pace_delta", "min"),
-        fp_best_delta=("fp_best_delta", "min"),
-        fp_laps=("fp_laps", "sum"),
-    )
 
 
 def sprint_features(year, round_number):
@@ -207,7 +103,7 @@ def sprint_features(year, round_number):
 
 
 def _merge_weekend_features(frame, year, round_number):
-    practice = practice_features(year, round_number)
+    practice = common.practice_features(year, round_number, PRACTICE_SESSIONS)
     if not practice.empty:
         for col in PRACTICE_COLS:
             frame[col] = frame["driver_number"].map(practice[col])
@@ -225,11 +121,11 @@ def load_completed_round(year, round_number, event_name):
     race.load(laps=False, telemetry=False, weather=False, messages=False)
     qres = quali.results
     rres = race.results
-    pole = pole_seconds(qres)
+    pole = common.pole_seconds(qres)
     rows = []
     for num in rres.index:
         entry = _row_from_result(rres, num, round_number, event_name)
-        entry["quali_time"] = best_quali_seconds(qres, num)
+        entry["quali_time"] = common.best_quali_seconds(qres, num)
         rows.append(entry)
     frame = pd.DataFrame(rows, columns=RAW_COLUMNS)
     frame["quali_delta"] = frame["quali_time"] - pole
@@ -240,7 +136,7 @@ def load_upcoming_round(year, round_number, event_name):
     quali = fastf1.get_session(year, round_number, "Q")
     quali.load(laps=False, telemetry=False, weather=False, messages=False)
     qres = quali.results
-    pole = pole_seconds(qres)
+    pole = common.pole_seconds(qres)
     rows = []
     for num in qres.index:
         row = qres.loc[num]
@@ -252,7 +148,7 @@ def load_upcoming_round(year, round_number, event_name):
             "driver": row["Abbreviation"],
             "team": row["TeamName"],
             "grid": float(grid) if pd.notna(grid) else np.nan,
-            "quali_time": best_quali_seconds(qres, num),
+            "quali_time": common.best_quali_seconds(qres, num),
             "finish": np.nan,
             "points": 0.0,
             "status": "",
@@ -264,49 +160,14 @@ def load_upcoming_round(year, round_number, event_name):
 
 
 def collect_season(year, schedule, refresh=False):
-    path = DATA_DIR / f"season_{year}.csv"
-    now = utc_now()
-    completed = []
-    for _, ev in schedule.iterrows():
-        race_utc = session_utc(ev, "Race")
-        if race_utc is not None and race_utc < now - COMPLETION_BUFFER:
-            completed.append((int(ev["RoundNumber"]), str(ev["EventName"])))
-
-    cached = None
-    if path.exists() and not refresh:
-        candidate = pd.read_csv(path, dtype={"driver_number": str})
-        if set(RAW_COLUMNS + ["quali_delta"]).issubset(candidate.columns):
-            cached = candidate
-        else:
-            print("cached season file lacks practice/sprint features, re-downloading")
-    have = set(cached["round"].unique()) if cached is not None else set()
-
-    todo = [(rn, name) for rn, name in completed if rn not in have]
-    print(f"Season {year}: {len(completed)} completed races ({len(have)} cached, {len(todo)} to fetch)")
-
-    frames = []
-    for rn, name in todo:
-        try:
-            frame = load_completed_round(year, rn, name)
-        except Exception as exc:
-            print(f"  round {rn:>2} ({name}) skipped: {type(exc).__name__}: {exc}")
-            continue
-        if frame["finish"].notna().sum() == 0:
-            print(f"  round {rn:>2} ({name}) skipped: no classified results yet")
-            continue
-        print(f"  fetched round {rn:>2}  {name}")
-        frames.append(frame)
-
-    if cached is not None:
-        frames.insert(0, cached)
-    if not frames:
-        return pd.DataFrame(columns=RAW_COLUMNS + ["quali_delta"])
-
-    data = pd.concat(frames, ignore_index=True)
-    data = data.drop_duplicates(subset=["round", "driver_number"], keep="last")
-    data = data.sort_values(["round", "driver_number"]).reset_index(drop=True)
-    data.to_csv(path, index=False)
-    return data
+    return common.collect_season(
+        year, schedule,
+        filename="season_{year}.csv",
+        required_columns=RAW_COLUMNS + ["quali_delta"],
+        result_column="finish",
+        load_round=load_completed_round,
+        refresh=refresh,
+    )
 
 
 def build_features(data):
@@ -329,16 +190,7 @@ def build_features(data):
 
 
 def make_model():
-    return HistGradientBoostingRegressor(
-        loss="absolute_error",
-        learning_rate=0.08,
-        max_iter=150,
-        max_leaf_nodes=15,
-        min_samples_leaf=20,
-        l2_regularization=1.0,
-        categorical_features=[FEATURES.index("team_id")],
-        random_state=42,
-    )
+    return common.make_model([FEATURES.index("team_id")])
 
 
 def train_model(features, target_round, mode="gain"):
@@ -370,19 +222,24 @@ def predict_round(model, features, target_round, mode="gain"):
     return rows.sort_values("pred_pos")
 
 
-def rank_corr(a, b):
-    ra = pd.Series(a).rank().to_numpy()
-    rb = pd.Series(b).rank().to_numpy()
-    if np.std(ra) == 0 or np.std(rb) == 0:
-        return np.nan
-    return float(np.corrcoef(ra, rb)[0, 1])
+def podium_points(pred_top3, actual_top3):
+    """Podium scoring for the web app: +15 per exact position match,
+    +5 per predicted podium driver in the wrong slot, +100 perfect-podium bonus."""
+    points = sum(15 if p == a else (5 if p in actual_top3 else 0)
+                 for p, a in zip(pred_top3, actual_top3))
+    if list(pred_top3) == list(actual_top3):
+        points += 100
+    return points
 
 
-def backtest_report(features, min_train_rounds):
+def backtest_records(features, min_train_rounds):
+    """Rolling backtest of gain vs direct model; one metrics dict per predicted round.
+
+    Alongside the CLI-reported metrics, each record carries the podium
+    points and the predicted/actual winner names used by the web app.
+    """
     rounds = sorted(features["round"].unique())
     records = []
-    print("\n=== Rolling backtest: gain model (finish - grid) vs direct model (absolute finish) ===")
-    print(f"{'rd':>3}  {'event':<26} {'gain':>5} {'direct':>6} {'grid':>5} {'podium':>8} {'winner':>8}")
     for r in rounds:
         if sum(1 for x in rounds if x < r) < min_train_rounds:
             continue
@@ -399,24 +256,39 @@ def backtest_report(features, min_train_rounds):
         if gain_scored.empty or winner_row.empty:
             continue
         winner = winner_row.iloc[0]
-        actual_top3 = set(features.loc[(features["round"] == r) & (features["finish"] <= 3), "driver"])
-        rec = {
+        actual_rows = features.loc[(features["round"] == r) & (features["finish"] <= 3)]
+        actual_top3_order = list(actual_rows.sort_values("finish")["driver"])
+        actual_top3 = set(actual_rows["driver"])
+        gain_top3 = list(gain.head(3)["driver"])
+        direct_top3 = list(direct.head(3)["driver"])
+        records.append({
             "round": r,
             "event": str(features.loc[features["round"] == r, "event"].iloc[0]),
             "gain_mae": float((gain_scored["pred_pos"] - gain_scored["finish"]).abs().mean()),
             "direct_mae": float((direct_scored["pred_pos"] - direct_scored["finish"]).abs().mean()),
             "grid_mae": float((gain_scored["grid"].rank(method="first") - gain_scored["finish"]).abs().mean()),
-            "gain_podium": len(actual_top3 & set(gain.head(3)["driver"])),
-            "direct_podium": len(actual_top3 & set(direct.head(3)["driver"])),
+            "gain_podium": len(actual_top3 & set(gain_top3)),
+            "direct_podium": len(actual_top3 & set(direct_top3)),
             "grid_podium": len(actual_top3 & set(gain_scored.nsmallest(3, "grid")["driver"])),
-            "gain_winner": 1 if gain.iloc[0]["driver"] == winner else 0,
-            "direct_winner": 1 if direct.iloc[0]["driver"] == winner else 0,
+            "gain_winner": 1 if gain_top3[0] == winner else 0,
+            "direct_winner": 1 if direct_top3[0] == winner else 0,
             "grid_winner": 1 if gain_scored.nsmallest(1, "grid")["driver"].iloc[0] == winner else 0,
-            "gain_corr": rank_corr(gain_scored["pred_pos"], gain_scored["finish"]),
-            "direct_corr": rank_corr(direct_scored["pred_pos"], direct_scored["finish"]),
-        }
-        records.append(rec)
-        print(f"{r:>3}  {rec['event']:<26} {rec['gain_mae']:>5.1f} {rec['direct_mae']:>6.1f} "
+            "gain_corr": common.rank_corr(gain_scored["pred_pos"], gain_scored["finish"]),
+            "direct_corr": common.rank_corr(direct_scored["pred_pos"], direct_scored["finish"]),
+            "gain_points": podium_points(gain_top3, actual_top3_order),
+            "direct_points": podium_points(direct_top3, actual_top3_order),
+            "gain_top1": gain_top3[0],
+            "direct_top1": direct_top3[0],
+            "actual_top1": winner,
+        })
+    return records
+
+
+def backtest_report(records):
+    print("\n=== Rolling backtest: gain model (finish - grid) vs direct model (absolute finish) ===")
+    print(f"{'rd':>3}  {'event':<26} {'gain':>5} {'direct':>6} {'grid':>5} {'podium':>8} {'winner':>8}")
+    for rec in records:
+        print(f"{rec['round']:>3}  {rec['event']:<26} {rec['gain_mae']:>5.1f} {rec['direct_mae']:>6.1f} "
               f"{rec['grid_mae']:>5.1f} {f'{rec['gain_podium']}/{rec['direct_podium']}':>8} "
               f"{('hit' if rec['gain_winner'] else '-') + '/' + ('hit' if rec['direct_winner'] else '-'):>8}")
     if not records:
@@ -442,31 +314,37 @@ def backtest_report(features, min_train_rounds):
           f"{np.nanmean([x['direct_corr'] for x in records]):>8.2f}")
 
 
-def importance_report(model, train, mode="gain"):
-    if mode == "gain":
-        target = (train["finish"] - train["grid"]).to_numpy(dtype=float)
-    else:
-        target = train["finish"].to_numpy(dtype=float)
-    result = permutation_importance(
-        model,
-        train[FEATURES].to_numpy(dtype=float),
-        target,
-        scoring="neg_mean_absolute_error",
-        n_repeats=5,
-        random_state=42,
-    )
-    order = np.argsort(result.importances_mean)[::-1]
-    print(f"\nFeature importance ({mode} model, permutation, increase in MAE when shuffled):")
-    for idx in order:
-        print(f"  {FEATURES[idx]:<22} {result.importances_mean[idx]:+.3f}")
+def final_predictions(features, target):
+    """Train both models on rounds before `target` and predict `target`.
 
-
-def final_report(features, year, target, event_name, mode):
+    Returns models, the training set and both prediction frames; the gain
+    frame carries a direct_pos column for side-by-side display.
+    """
     gain_model, train_set = train_model(features, target, "gain")
     direct_model, _ = train_model(features, target, "direct")
     gain = predict_round(gain_model, features, target, "gain")
     direct = predict_round(direct_model, features, target, "direct")
     gain["direct_pos"] = gain["driver"].map(direct.set_index("driver")["pred_pos"]).astype(int)
+    return {"gain_model": gain_model, "direct_model": direct_model,
+            "train": train_set, "gain": gain, "direct": direct}
+
+
+def importance_frame(pred, mode="gain"):
+    """Permutation importance for one of the final models, as a DataFrame."""
+    train = pred["train"]
+    X = train[FEATURES].to_numpy(dtype=float)
+    if mode == "gain":
+        target = (train["finish"] - train["grid"]).to_numpy(dtype=float)
+        model = pred["gain_model"]
+    else:
+        target = train["finish"].to_numpy(dtype=float)
+        model = pred["direct_model"]
+    return common.importance_scores(model, FEATURES, X, target)
+
+
+def final_report(features, year, target, event_name, mode):
+    pred = final_predictions(features, target)
+    gain = pred["gain"]
     print(f"\n=== Prediction: {year} {event_name} (round {target}) ===")
     if mode == "pre":
         print("grid estimated from qualifying classification (grid penalties not applied)\n")
@@ -491,8 +369,14 @@ def final_report(features, year, target, event_name, mode):
     else:
         print(f"Predicted winner (gain model)   : {gain.iloc[0]['driver']}")
         print(f"Predicted winner (direct model) : {gain.sort_values('direct_pos').iloc[0]['driver']}")
-    importance_report(gain_model, train_set, "gain")
-    importance_report(direct_model, train_set, "direct")
+    train = pred["train"]
+    X = train[FEATURES].to_numpy(dtype=float)
+    common.importance_report(pred["gain_model"], FEATURES, X,
+                             (train["finish"] - train["grid"]).to_numpy(dtype=float),
+                             "gain", width=22)
+    common.importance_report(pred["direct_model"], FEATURES, X,
+                             train["finish"].to_numpy(dtype=float),
+                             "direct", width=22)
 
 
 def resolve_target(args, year, schedule, data):
@@ -584,7 +468,7 @@ def main():
     print(f"\nDataset: {n_rounds} rounds, {len(features)} driver-race records")
     print(f"Features: {', '.join(FEATURES)}")
 
-    backtest_report(features, args.min_train_rounds)
+    backtest_report(backtest_records(features, args.min_train_rounds))
     final_report(features, year, target, event_name, mode)
 
 
