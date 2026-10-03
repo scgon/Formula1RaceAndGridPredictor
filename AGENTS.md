@@ -113,4 +113,5 @@ Takes ~5-10 min (re-runs backtest + charts). The notebooks must finish with no c
 ## Repo
 
 - Remote: `https://github.com/scgon/Formula1RaceAndGridPredictor.git`, branch `main`; `git push origin main` works (credentials configured).
+- The web app is publicly hosted at https://formula1predictions.streamlit.app — treat the UI as user-facing: changes pushed to the repo can end up visible there.
 - `pipelines/predict_race.py --help` is the cheap import/argparse smoke test (~2s) when you only need to confirm the code loads.

@@ -1,7 +1,7 @@
 """Entry point for the Streamlit web app.
 
-Run with the project interpreter, from the repo root:
-    /opt/homebrew/Caskroom/miniconda/base/bin/python -m streamlit run app.py
+Run from the repo root (see the GitHub README for setup):
+    python -m streamlit run app.py
 """
 
 import streamlit as st

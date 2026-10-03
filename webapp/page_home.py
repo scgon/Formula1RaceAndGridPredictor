@@ -121,11 +121,9 @@ if rows:
 else:
     st.warning("No season data cached yet — run either prediction page once to download it.")
 
-with st.expander("Running from the command line instead"):
-    st.code(
-        "PY=/opt/homebrew/Caskroom/miniconda/base/bin/python\n"
-        "$PY -m streamlit run app.py               # this web app\n"
-        "$PY -u pipelines/predict_race.py --next   # race prediction CLI\n"
-        "$PY -u pipelines/predict_grid.py --next   # qualifying prediction CLI",
-        language="bash",
+with st.expander("Prefer the command line?"):
+    st.markdown(
+        "Both pipelines also run as command-line scripts. See the "
+        "[GitHub README](https://github.com/scgon/Formula1RaceAndGridPredictor#quick-start-cli) "
+        "for setup, dependencies and the full list of flags."
     )

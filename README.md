@@ -28,6 +28,22 @@ Two independent ML pipelines for predicting F1 race results and qualifying grids
 
 `f1_common.py` holds everything both pipelines need — fastf1 cache setup, qualifying-lap extraction, practice-lap features, the season CSV cache, the model factory and permutation importance. The pipelines stay independent entry points with their own features, targets and models. The web app builds on the same pipeline functions, so CLI and web results are identical by construction.
 
+## Setup
+
+Requires Python 3.10+ (tested on 3.14). Any environment with the dependencies installed works — the maintainer uses Homebrew miniconda on macOS, but a plain `venv` (or conda, or any other manager) is fine:
+
+```bash
+git clone https://github.com/scgon/Formula1RaceAndGridPredictor.git
+cd Formula1RaceAndGridPredictor
+
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+
+python -m pip install -r requirements.txt
+```
+
+If your system's `python` is missing or maps to an old Python, create the venv with `python3 -m venv .venv` (Linux/macOS) or `py -3 -m venv .venv` (Windows launcher). Once the environment is activated, plain `python` refers to it — all commands below assume that.
+
 ## Pipelines
 
 | Script | Target | Models | Baseline |
@@ -52,9 +68,10 @@ Both use `HistGradientBoostingRegressor` with a rolling backtest and identical f
 
 ## Web App
 
+**Try it live:** https://formula1predictions.streamlit.app — or run it locally:
+
 ```bash
-PY=/opt/homebrew/Caskroom/miniconda/base/bin/python
-$PY -m streamlit run app.py
+python -m streamlit run app.py
 ```
 
 Three pages:
@@ -77,24 +94,23 @@ Each prediction page lets you pick the season, the target round (auto / next on 
 ## Quick Start (CLI)
 
 ```bash
-# Use the miniconda Python (required — system python lacks deps)
-PY=/opt/homebrew/Caskroom/miniconda/base/bin/python
-
 # Race prediction for the next race (after quali is done)
-$PY -u pipelines/predict_race.py --next
+python -u pipelines/predict_race.py --next
 
 # Grid prediction for the next qualifying (day before quali)
-$PY -u pipelines/predict_grid.py --next
+python -u pipelines/predict_grid.py --next
 
 # Specific season & round
-$PY -u pipelines/predict_race.py --season 2024 --predict-round 12
-$PY -u pipelines/predict_grid.py --season 2024 --predict-round 12
+python -u pipelines/predict_race.py --season 2024 --predict-round 12
+python -u pipelines/predict_grid.py --season 2024 --predict-round 12
 
 # Force re-download of season data
-$PY -u pipelines/predict_race.py --refresh
+python -u pipelines/predict_race.py --refresh
 ```
 
 **First run** downloads ~45 fastf1 sessions (~several minutes). Subsequent runs use `cache/` and `data/*.csv` (~3–4 min).
+
+Run with `-u` (unbuffered output) and don't pipe long runs through `head` — block buffering makes them look stalled.
 
 ## Flags
 
@@ -119,16 +135,16 @@ Each run prints:
 
 Verify notebooks:
 ```bash
-$PY -m nbconvert --to notebook --execute --inplace notebooks/race_predictions.ipynb
-$PY -m nbconvert --to notebook --execute --inplace notebooks/grid_predictions.ipynb
+python -m nbconvert --to notebook --execute --inplace notebooks/race_predictions.ipynb
+python -m nbconvert --to notebook --execute --inplace notebooks/grid_predictions.ipynb
 ```
 (Takes 5–10 min each.)
 
 ## Requirements
 
-- Python 3.10+ (tested on 3.14 via miniconda)
-- `fastf1`, `pandas`, `numpy`, `scikit-learn`, `streamlit`, `matplotlib` (notebook charts)
-- All deps pre-installed in the miniconda env at `/opt/homebrew/Caskroom/miniconda/base/bin/python`
+- Python 3.10+ (tested on 3.14)
+- Dependencies listed in `requirements.txt`: `fastf1`, `pandas`, `numpy`, `scikit-learn`, `streamlit`, `matplotlib` (notebook charts)
+- Install with `python -m pip install -r requirements.txt` — see [Setup](#setup)
 
 ## Architecture Notes
 
@@ -142,7 +158,7 @@ $PY -m nbconvert --to notebook --execute --inplace notebooks/grid_predictions.ip
 
 | Issue | Fix |
 |-------|-----|
-| `ModuleNotFoundError: fastf1` | Use the miniconda python path (`$PY` above), not `python3` |
+| `ModuleNotFoundError: fastf1` | The interpreter you're using doesn't have the dependencies — activate the environment from [Setup](#setup), or run `python -m pip install -r requirements.txt` inside it |
 | Slow first run | Expected — downloads ~45 sessions; subsequent runs are fast |
 | "qualifying has not happened yet" | Run after FP2 for grid, after quali for race; or use `--predict-round` on a past round |
 | Metrics shift after code change | Expected — deterministic models mean metric changes = code changes, not noise |
