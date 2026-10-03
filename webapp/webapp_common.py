@@ -207,7 +207,8 @@ def prepare_features(kind, season, target, mode, event_name):
     return {"features": features, "log": log.getvalue()}
 
 
-def run_pipeline(kind, year, data_version, force_refresh, selection, min_train):
+def run_pipeline(kind, year, data_version, force_refresh, selection, min_train,
+                 profile="fast"):
     """Execute the full pipeline once with the given settings.
 
     Returns a render bundle for the page (stored in st.session_state by the
@@ -217,8 +218,12 @@ def run_pipeline(kind, year, data_version, force_refresh, selection, min_train):
     mod = MODULES[kind]
     label = "race" if kind == "race" else "qualifying"
     main_mode = "gain" if kind == "race" else "anchor"
+    tune_note = " (tuning hyperparameters per model)" if profile == "optimized" else ""
     log_box = st.empty()
     try:
+        # one capture spans the whole run: download progress, then the
+        # per-model training lines the pipelines print during the backtest
+        # and final-model phases, all streamed live into the log element.
         with capture_stdout(log_box, refresh_secs=0.3):
             season = load_season(kind, year, force_refresh)
             if season["data"] is None:
@@ -227,15 +232,15 @@ def run_pipeline(kind, year, data_version, force_refresh, selection, min_train):
             target, mode, event_name, resolve_log = resolve_target(
                 kind, selection, used_year, season["schedule"], season["data"])
             prep = prepare_features(kind, season, target, mode, event_name)
-        features = prep["features"]
-        with st.spinner("Running rolling backtest (one model pair per round)..."):
-            records = mod.backtest_records(features, min_train)
-        with st.spinner("Training final models and computing permutation importance..."):
-            pred = mod.final_predictions(features, target)
-            imp_main = mod.importance_frame(pred, main_mode)
-            imp_direct = mod.importance_frame(pred, "direct")
+            features = prep["features"]
+            with st.spinner(f"Running rolling backtest (one model pair per round){tune_note}..."):
+                records = mod.backtest_records(features, min_train, profile)
+            with st.spinner("Training final models and computing permutation importance..."):
+                pred = mod.final_predictions(features, target, profile)
+                imp_main = mod.importance_frame(pred, main_mode)
+                imp_direct = mod.importance_frame(pred, "direct")
         return {
-            "settings": (year, data_version, force_refresh, selection, min_train),
+            "settings": (year, data_version, force_refresh, selection, min_train, profile),
             "requested_year": year,
             "year": used_year,
             "target": target,
@@ -250,6 +255,9 @@ def run_pipeline(kind, year, data_version, force_refresh, selection, min_train):
             "train_rounds": int(pred["train"]["round"].nunique()),
             "imp_main": imp_main,
             "imp_direct": imp_direct,
+            "tuned_params": ({main_mode: pred[f"{main_mode}_params"],
+                              "direct": pred["direct_params"]}
+                             if profile == "optimized" else None),
         }
     except TargetUnavailable as exc:
         return {"error": str(exc)}
@@ -333,6 +341,39 @@ def first_backtest_control(kind, completed):
     if selected is None:
         return f1_common.MIN_TRAIN_ROUNDS
     return sum(1 for r in completed if r < selected)
+
+
+def model_profile_input(kind):
+    """Sidebar selectbox for the model profile (the CLI --model flag).
+
+    "Fast" keeps the project's fixed hyperparameters; "Optimized" runs a
+    small hyperparameter search per trained model (minimizing
+    cross-validated MAE over the training rounds) — usually a better MAE,
+    but the backtest takes noticeably longer.
+    """
+    options = ("Fast", "Optimized")
+    choice = st.selectbox(
+        "Model profile", options, key=f"{kind}_model_profile",
+        help="Fast: fixed hyperparameters, quickest run. Optimized: every model tunes its "
+             "hyperparameters by minimizing cross-validated MAE on the rounds it trains on — "
+             "better predictions on average, but the run takes longer.")
+    return "optimized" if choice == "Optimized" else "fast"
+
+
+def tuned_params_expander(result, labels):
+    """Expander listing the hyperparameters the optimized profile picked for
+    the final models (rendered only for optimized runs)."""
+    params = result.get("tuned_params")
+    if not params:
+        return
+    with st.expander("Tuned hyperparameters (this run)"):
+        st.caption("Chosen per model by minimizing cross-validated MAE over the training "
+                   "rounds; the fast profile's fixed values were always a candidate, so the "
+                   "search never scores worse than Fast on that validation.")
+        untuned = "fast defaults (no clearly better combination found)"
+        for key, label in labels.items():
+            picked = f1_common.format_params(params.get(key)) or untuned
+            st.markdown(f"**{label} model**: {picked}")
 
 
 def log_expander(title, text):

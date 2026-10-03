@@ -95,7 +95,10 @@ st.markdown(
     "Reported metrics: mean absolute position error (MAE), podium hit rate, pole/winner "
     "hit rate and rank correlation — always compared against the naive baseline. "
     "Models are `HistGradientBoostingRegressor` with a fixed seed: identical data gives "
-    "identical predictions."
+    "identical predictions.\n\n"
+    "Each prediction page offers two **model profiles**: *Fast* (fixed hyperparameters, "
+    "quickest run) and *Optimized* (every model tunes its hyperparameters by minimizing "
+    "cross-validated MAE on the rounds it trains on — usually a better MAE, but a slower run)."
 )
 
 # --- cached data status ----------------------------------------------------

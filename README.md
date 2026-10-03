@@ -51,7 +51,7 @@ If your system's `python` is missing or maps to an old Python, create the venv w
 | `pipelines/predict_race.py` | Race finish position | **Gain** (finish − grid) vs **Direct** (absolute finish) | Grid order |
 | `pipelines/predict_grid.py` | Qualifying position | **Anchor** (change vs last quali) vs **Direct** (absolute position) | Last quali order (persistence) |
 
-Both use `HistGradientBoostingRegressor` with a rolling backtest and identical feature sets across models for fair comparison.
+Both use `HistGradientBoostingRegressor` with a rolling backtest and identical feature sets across models for fair comparison. Two model profiles are selectable (`--model` on the CLI, *Model profile* in the web app): **fast** (fixed hyperparameters, quickest) and **optimized** (every model tunes its hyperparameters by minimizing cross-validated MAE over its own training rounds — better error on average, slower to run; models fall back to the fast values whenever no candidate clearly beats them).
 
 ## Features
 
@@ -83,13 +83,13 @@ Three pages:
 | **Qualifying prediction** | Anchor vs direct prediction table, error-by-round chart, final predicted grids diagram, backtest metrics, pole points and predicted-pole tables, feature importance |
 
 Presentation notes:
-- Runs are explicit: change any setting and press **Run prediction** — changing a widget never starts the pipeline. **Reload season data** refreshes the underlying data (downloading newly completed rounds, or everything when *Force full re-download* is checked — checking the box alone downloads nothing), and the round currently downloading (number + event name) is shown live in a log while data loads.
+- Runs are explicit: change any setting and press **Run prediction** — changing a widget never starts the pipeline. **Reload season data** refreshes the underlying data (downloading newly completed rounds, or everything when *Force full re-download* is checked — checking the box alone downloads nothing), and progress is shown live in a log while data loads and while the backtest trains each round's models (round, event, model — and whether hyperparameters are being tuned).
 - Review mode (already-completed rounds) sorts rows by the actual result; prediction mode by the model's order. Table cells hold numeric values displayed as `P{n}`, so column sorting works numerically, and exact predictions (error 0) are highlighted green.
 - P1/P2/P3 cells are colored gold/silver/bronze; driver and team names are colored with official team colors (from fastf1).
 - Scoring: race podium points (+15 exact position, +5 wrong slot, +100 perfect podium) and quali pole points (+15 correct pole), with per-round results plus season-total and average-per-round rows.
 - Rounds predicted from a single round of training data (round 2 for races, round 3 for qualifying) are flagged in-app: with so few rows the models cannot make a single tree split, so those predictions effectively reproduce the baseline (grid / last-quali) order.
 
-Each prediction page lets you pick the season, the target round (auto / next on the calendar / any specific round) and the first backtest round (auto — recommended — or any specific round; earliest selectable: round 2 for races, round 3 for qualifying) in the sidebar.
+Each prediction page lets you pick the season, the target round (auto / next on the calendar / any specific round), the first backtest round (auto — recommended — or any specific round; earliest selectable: round 2 for races, round 3 for qualifying) and the model profile (**Fast** — fixed hyperparameters, or **Optimized** — per-model hyperparameter search, slower but usually lower MAE; the chosen hyperparameters are shown after each run) in the sidebar.
 
 ## Quick Start (CLI)
 
@@ -103,6 +103,9 @@ python -u pipelines/predict_grid.py --next
 # Specific season & round
 python -u pipelines/predict_race.py --season 2024 --predict-round 12
 python -u pipelines/predict_grid.py --season 2024 --predict-round 12
+
+# Optimized model profile (tunes hyperparameters per model — slower run)
+python -u pipelines/predict_race.py --next --model optimized
 
 # Force re-download of season data
 python -u pipelines/predict_race.py --refresh
@@ -119,15 +122,17 @@ Run with `-u` (unbuffered output) and don't pipe long runs through `head` — bl
 | `--season YEAR` | Season year (default: current, falls back to previous) |
 | `--predict-round N` | Round number to predict |
 | `--next` | Auto-select next race/quali on calendar |
+| `--model {fast,optimized}` | Model profile: `fast` uses fixed hyperparameters, `optimized` tunes them per model by minimizing cross-validated MAE (better error, slower run) |
 | `--refresh` | Ignore local cache, re-download all sessions |
 | `--min-train-rounds N` | Minimum completed rounds before first backtest prediction (default: 5) |
 
 ## Output
 
-Each run prints:
+Each run prints (with live per-model training progress while the backtest and final models train):
 1. **Rolling backtest** — MAE, podium hit rate, pole/winner hit rate, rank correlation for both models vs baseline
 2. **Final prediction** — Predicted grid/finish order for the target round with both models
-3. **Feature importance** — Permutation importance (MAE increase when shuffled)
+3. **Tuned hyperparameters** — the values the optimized profile picked for the final models (only with `--model optimized`; "fast defaults" means nothing clearly beat them)
+4. **Feature importance** — Permutation importance (MAE increase when shuffled)
 
 ## Notebooks
 
@@ -148,8 +153,9 @@ python -m nbconvert --to notebook --execute --inplace notebooks/grid_predictions
 
 ## Architecture Notes
 
-- Each pipeline exposes structured results for the web app: `backtest_records()` (per-round metric dicts) and `final_predictions()` (models + prediction frames); `backtest_report()` / `final_report()` print the same data for the CLI.
-- Deterministic: fixed `random_state=42`, stable data ordering → identical metrics on identical input
+- Each pipeline exposes structured results for the web app: `backtest_records(features, min_train_rounds, profile)` (per-round metric dicts) and `final_predictions(features, target, profile)` (models + prediction frames + the hyperparameters the profile picked); `backtest_report()` / `final_report()` print the same data for the CLI.
+- Model profiles: `fast` fits the fixed hyperparameters; `optimized` runs a seeded randomized search per model (pooled-MAE scoring over rolling CV folds, the fast values always a candidate, adopted only when they are clearly beaten)
+- Deterministic: fixed `random_state=42`, stable data ordering → identical metrics on identical input under both profiles (the search sampling is seeded too)
 - Caches (`cache/`, `data/`) live at the repo root and are shared by pipelines, web app and notebooks; `--refresh` or schema changes trigger full re-download
 - Race completion buffer: 3 hours after race start (prevents caching partial results during live races)
 - Grid pipeline day-before-quali constraint: only FP1/FP2 + sprint quali features allowed

@@ -9,6 +9,7 @@ The Streamlit app (app.py) builds on the same functions.
 
 import warnings
 from datetime import datetime, timedelta, timezone
+from itertools import product
 from pathlib import Path
 
 import numpy as np
@@ -29,6 +30,39 @@ MIN_TRAIN_ROUNDS = 5
 STINT_WINDOW = 5
 STINT_MIN_LAPS = 3
 COMPLETION_BUFFER = timedelta(hours=3)
+
+# --- model profiles ---------------------------------------------------------
+
+#: Selectable via the CLI `--model` flag and the web-app sidebar.
+#:   fast      — fixed FAST_PARAMS hyperparameters; quickest to run.
+#:   optimized — per-fit hyperparameter search (tune_hyperparameters) that
+#:               minimizes cross-validated MAE over the training rounds;
+#:               slower to run, usually lower MAE.
+MODEL_PROFILES = ("fast", "optimized")
+
+FAST_PARAMS = {
+    "loss": "absolute_error",
+    "learning_rate": 0.08,
+    "max_iter": 150,
+    "max_leaf_nodes": 15,
+    "min_samples_leaf": 20,
+    "l2_regularization": 1.0,
+}
+
+# Hyperparameter candidates sampled by the optimized profile. loss
+# (absolute_error) and the categorical features are not searched.
+TUNED_SEARCH_SPACE = {
+    "learning_rate": [0.03, 0.06, 0.08, 0.12, 0.2],
+    "max_iter": [100, 200, 400],
+    "max_leaf_nodes": [3, 7, 15, 31],
+    "min_samples_leaf": [5, 10, 20, 40],
+    "l2_regularization": [0.0, 0.25, 1.0, 4.0],
+}
+TUNE_N_ITER = 20
+TUNE_MAX_SPLITS = None
+TUNE_MIN_IMPROVEMENT = 0.05
+TUNE_STRIDE = 2
+TUNE_RANDOM_STATE = 42
 
 
 def setup():
@@ -198,17 +232,112 @@ def collect_season(year, schedule, *, filename, required_columns, result_column,
     return data
 
 
-def make_model(categorical_features):
+def make_model(categorical_features, profile="fast", tuned_params=None):
+    """HistGradientBoostingRegressor for the given profile.
+
+    fast      — FAST_PARAMS, the project's fixed hyperparameters (quick).
+    optimized — the hyperparameters returned by tune_hyperparameters for this
+                training set; falls back to FAST_PARAMS when tuned_params is
+                None (too little data to tune on).
+    """
+    if profile not in MODEL_PROFILES:
+        raise ValueError(f"unknown model profile: {profile!r}")
+    params = dict(FAST_PARAMS)
+    if profile == "optimized" and tuned_params:
+        params.update(tuned_params)
     return HistGradientBoostingRegressor(
-        loss="absolute_error",
-        learning_rate=0.08,
-        max_iter=150,
-        max_leaf_nodes=15,
-        min_samples_leaf=20,
-        l2_regularization=1.0,
         categorical_features=categorical_features,
         random_state=42,
+        **params,
     )
+
+
+def tune_hyperparameters(X, y, rounds, categorical_features=None,
+                         n_iter=TUNE_N_ITER, random_state=TUNE_RANDOM_STATE):
+    """Search TUNED_SEARCH_SPACE for the combination with the lowest
+    cross-validated MAE on one model's training set.
+
+    The CV mimics the rolling backtest: validation rounds are held out one
+    at a time, each predicted by a model fit on all earlier rounds only;
+    errors are pooled across folds. Shipped defaults validate on every
+    TUNE_STRIDE-th training round (strided leave-one-round-out) so the
+    score reflects the whole training window rather than the regime of a
+    few recent rounds; setting TUNE_MAX_SPLITS to an int restricts
+    validation to that many recent rounds instead. The FAST_PARAMS
+    combination is always evaluated first and ties keep it. Because folds
+    are small, a candidate must beat the fast hyperparameters by at least
+    TUNE_MIN_IMPROVEMENT (relative MAE) before it is adopted — without
+    that margin the search would chase fold noise and could end up worse
+    out-of-sample than the fast profile.
+
+    Returns the winning parameter dict, or None when the training set
+    covers fewer than two rounds (nothing to cross-validate) or no
+    candidate clearly beat the fast hyperparameters — in both cases
+    callers fall back to the fast profile.
+    """
+    X = np.asarray(X, dtype=float)
+    y = np.asarray(y, dtype=float)
+    rounds = np.asarray(rounds)
+    unique = np.unique(rounds)
+    if TUNE_MAX_SPLITS is None:
+        val_rounds = unique[1::TUNE_STRIDE]
+    else:
+        val_rounds = unique[-min(TUNE_MAX_SPLITS, len(unique) - 1):]
+    if len(val_rounds) == 0:
+        return None
+    # A fold whose training share is all-NaN in some column (e.g. round 1
+    # has no form or sprint data) would crash HistGradientBoosting — zero
+    # those columns for the fit; a constant column cannot be split on, so
+    # the model simply ignores that feature in that fold.
+    fold_sets = []
+    for r in val_rounds:
+        X_train = X[rounds < r]
+        all_nan = np.isnan(X_train).all(axis=0)
+        if all_nan.any():
+            X_train = X_train.copy()
+            X_train[:, all_nan] = 0.0
+        fold_sets.append((X_train, y[rounds < r], X[rounds == r], y[rounds == r]))
+
+    keys = list(TUNED_SEARCH_SPACE)
+    combos = list(product(*(TUNED_SEARCH_SPACE[key] for key in keys)))
+    fast = tuple(FAST_PARAMS[key] for key in keys)
+    rng = np.random.RandomState(random_state)
+    sampled = [combo for combo in
+               (combos[i] for i in rng.choice(len(combos), size=n_iter, replace=False))
+               if combo != fast][:n_iter]
+    candidates = [fast] + sampled
+
+    def pooled_mae(combo):
+        errors = []
+        for X_train, y_train, X_val, y_val in fold_sets:
+            model = HistGradientBoostingRegressor(
+                categorical_features=categorical_features,
+                random_state=random_state,
+                loss="absolute_error",
+                **dict(zip(keys, combo)),
+            )
+            model.fit(X_train, y_train)
+            errors.append(np.abs(model.predict(X_val) - y_val))
+        return float(np.concatenate(errors).mean())
+
+    fast_mae = pooled_mae(fast)
+    best_params = None
+    best_mae = np.inf
+    for combo in candidates:
+        mae = fast_mae if combo == fast else pooled_mae(combo)
+        if mae < best_mae:
+            best_mae = mae
+            best_params = dict(zip(keys, combo))
+    if best_mae > fast_mae * (1 - TUNE_MIN_IMPROVEMENT):
+        return None
+    return best_params
+
+
+def format_params(params):
+    """Compact one-line rendering of a hyperparameter dict for reports."""
+    if not params:
+        return ""
+    return ", ".join(f"{key}={value}" for key, value in params.items())
 
 
 def rank_corr(a, b):

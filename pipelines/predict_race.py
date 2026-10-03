@@ -198,12 +198,19 @@ def usable_features(frame):
     return [name for name, col in zip(FEATURES, matrix.T) if not np.isnan(col).all()]
 
 
-def make_model(feature_names):
+def make_model(feature_names, profile="fast", tuned_params=None):
     categorical = [feature_names.index("team_id")] if "team_id" in feature_names else []
-    return common.make_model(categorical)
+    return common.make_model(categorical, profile, tuned_params)
 
 
-def train_model(features, target_round, mode="gain"):
+def train_model(features, target_round, mode="gain", profile="fast"):
+    """Fit one model on all rounds before `target_round`.
+
+    Returns (model, train frame, used feature list, tuned hyperparameters).
+    With profile="optimized" the hyperparameters come from a CV-MAE search
+    over the training set (None when nothing clearly beat the fast defaults,
+    in which case the model falls back to the fast profile's fixed values).
+    """
     train = features[
         (features["round"] < target_round)
         & features["finish"].notna()
@@ -216,9 +223,17 @@ def train_model(features, target_round, mode="gain"):
     else:
         target = train["finish"].to_numpy(dtype=float)
     used = usable_features(train)
-    model = make_model(used)
-    model.fit(train[used].to_numpy(dtype=float), target)
-    return model, train, used
+    X = train[used].to_numpy(dtype=float)
+    categorical = [used.index("team_id")] if "team_id" in used else None
+    tuned = None
+    if profile == "optimized":
+        tuned = common.tune_hyperparameters(
+            X, target, train["round"].to_numpy(),
+            categorical_features=categorical,
+        )
+    model = make_model(used, profile, tuned)
+    model.fit(X, target)
+    return model, train, used, tuned
 
 
 def predict_round(model, features, target_round, mode="gain", use_features=None):
@@ -244,21 +259,26 @@ def podium_points(pred_top3, actual_top3):
     return points
 
 
-def backtest_records(features, min_train_rounds):
+def backtest_records(features, min_train_rounds, profile="fast"):
     """Rolling backtest of gain vs direct model; one metrics dict per predicted round.
 
     Alongside the CLI-reported metrics, each record carries the podium
     points, the predicted/actual winner names and the number of rounds each
-    model trained on (used by the web app).
+    model trained on (used by the web app). Prints one live progress line
+    per trained model (streamed into the web app's download log).
     """
     rounds = sorted(features["round"].unique())
+    tune_note = " (tuning hyperparameters)" if profile == "optimized" else ""
     records = []
     for r in rounds:
         if sum(1 for x in rounds if x < r) < min_train_rounds:
             continue
+        event = str(features.loc[features["round"] == r, "event"].iloc[0])
         try:
-            gain_model, gain_train, gain_used = train_model(features, r, "gain")
-            direct_model, direct_train, direct_used = train_model(features, r, "direct")
+            print(f"backtest round {r:>2}  {event}: training gain model{tune_note}...")
+            gain_model, gain_train, gain_used, _ = train_model(features, r, "gain", profile)
+            print(f"backtest round {r:>2}  {event}: training direct model{tune_note}...")
+            direct_model, direct_train, direct_used, _ = train_model(features, r, "direct", profile)
         except ValueError:
             continue
         gain = predict_round(gain_model, features, r, "gain", gain_used)
@@ -276,7 +296,7 @@ def backtest_records(features, min_train_rounds):
         direct_top3 = list(direct.head(3)["driver"])
         records.append({
             "round": r,
-            "event": str(features.loc[features["round"] == r, "event"].iloc[0]),
+            "event": event,
             "gain_mae": float((gain_scored["pred_pos"] - gain_scored["finish"]).abs().mean()),
             "direct_mae": float((direct_scored["pred_pos"] - direct_scored["finish"]).abs().mean()),
             "grid_mae": float((gain_scored["grid"].rank(method="first") - gain_scored["finish"]).abs().mean()),
@@ -329,22 +349,30 @@ def backtest_report(records):
           f"{np.nanmean([x['direct_corr'] for x in records]):>8.2f}")
 
 
-def final_predictions(features, target):
+def final_predictions(features, target, profile="fast"):
     """Train both models on rounds before `target` and predict `target`.
 
     Returns models, the training set and both prediction frames; the gain
     frame carries a direct_pos column for side-by-side display. The feature
     lists actually used by each model (all-NaN training columns dropped)
-    are returned as gain_features / direct_features.
+    are returned as gain_features / direct_features, and the hyperparameters
+    the profile selected as gain_params / direct_params (None = fixed fast
+    values, either because profile="fast" or because there was too little
+    data to tune on). Prints one live progress line per trained model
+    (streamed into the web app's download log).
     """
-    gain_model, train_set, gain_used = train_model(features, target, "gain")
-    direct_model, _, direct_used = train_model(features, target, "direct")
+    tune_note = " (tuning hyperparameters)" if profile == "optimized" else ""
+    print(f"training final gain model{tune_note}...")
+    gain_model, train_set, gain_used, gain_params = train_model(features, target, "gain", profile)
+    print(f"training final direct model{tune_note}...")
+    direct_model, _, direct_used, direct_params = train_model(features, target, "direct", profile)
     gain = predict_round(gain_model, features, target, "gain", gain_used)
     direct = predict_round(direct_model, features, target, "direct", direct_used)
     gain["direct_pos"] = gain["driver"].map(direct.set_index("driver")["pred_pos"]).astype(int)
     return {"gain_model": gain_model, "direct_model": direct_model,
             "train": train_set, "gain": gain, "direct": direct,
-            "gain_features": gain_used, "direct_features": direct_used}
+            "gain_features": gain_used, "direct_features": direct_used,
+            "gain_params": gain_params, "direct_params": direct_params}
 
 
 def importance_frame(pred, mode="gain"):
@@ -361,8 +389,8 @@ def importance_frame(pred, mode="gain"):
     return common.importance_scores(model, used, train[used].to_numpy(dtype=float), target)
 
 
-def final_report(features, year, target, event_name, mode):
-    pred = final_predictions(features, target)
+def final_report(features, year, target, event_name, mode, profile="fast"):
+    pred = final_predictions(features, target, profile)
     gain = pred["gain"]
     print(f"\n=== Prediction: {year} {event_name} (round {target}) ===")
     if mode == "pre":
@@ -389,6 +417,12 @@ def final_report(features, year, target, event_name, mode):
         print(f"Predicted winner (gain model)   : {gain.iloc[0]['driver']}")
         print(f"Predicted winner (direct model) : {gain.sort_values('direct_pos').iloc[0]['driver']}")
     train = pred["train"]
+    if profile == "optimized":
+        untuned = "fast defaults (no clearly better combination found)"
+        print(f"\nTuned hyperparameters (gain model)   : "
+              f"{common.format_params(pred['gain_params']) or untuned}")
+        print(f"Tuned hyperparameters (direct model) : "
+              f"{common.format_params(pred['direct_params']) or untuned}")
     common.importance_report(pred["gain_model"], pred["gain_features"],
                              train[pred["gain_features"]].to_numpy(dtype=float),
                              (train["finish"] - train["grid"]).to_numpy(dtype=float),
@@ -462,6 +496,10 @@ def main():
                         help="predict the next race on the calendar (requires qualifying to be done)")
     parser.add_argument("--min-train-rounds", type=int, default=MIN_TRAIN_ROUNDS,
                         help="minimum completed rounds needed before first prediction (default: 5)")
+    parser.add_argument("--model", choices=common.MODEL_PROFILES, default="fast",
+                        help="model profile: 'fast' uses fixed hyperparameters, "
+                             "'optimized' tunes them per model by minimizing "
+                             "cross-validated MAE (better error, slower run)")
     parser.add_argument("--refresh", action="store_true",
                         help="re-download season data, ignoring the local cache")
     args = parser.parse_args()
@@ -488,8 +526,8 @@ def main():
     print(f"\nDataset: {n_rounds} rounds, {len(features)} driver-race records")
     print(f"Features: {', '.join(FEATURES)}")
 
-    backtest_report(backtest_records(features, args.min_train_rounds))
-    final_report(features, year, target, event_name, mode)
+    backtest_report(backtest_records(features, args.min_train_rounds, args.model))
+    final_report(features, year, target, event_name, mode, args.model)
 
 
 if __name__ == "__main__":

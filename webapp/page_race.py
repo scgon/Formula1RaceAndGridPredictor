@@ -36,6 +36,7 @@ with st.sidebar:
     completed = wc.completed_round_numbers(schedule)
     selection = wc.target_selectbox(KIND, schedule, set(completed))
     min_train = wc.first_backtest_control(KIND, completed)
+    profile = wc.model_profile_input(KIND)
     run_pressed = st.button("Run prediction", type="primary", key=f"{KIND}_run",
                             help="Execute the pipeline with the current settings — "
                                  "changing settings never starts it automatically.")
@@ -51,7 +52,7 @@ if reload_pressed:
 
 if run_pressed:
     result = wc.run_pipeline(KIND, year, st.session_state[VERSION_KEY],
-                             force_refresh, selection, min_train)
+                             force_refresh, selection, min_train, profile)
     if "error" in result:
         st.session_state[ERROR_KEY] = result["error"]
     else:
@@ -71,7 +72,8 @@ if result is None:
                 "**Run prediction**.")
     st.stop()
 
-if result["settings"] != (year, st.session_state[VERSION_KEY], force_refresh, selection, min_train):
+if result["settings"] != (year, st.session_state[VERSION_KEY], force_refresh,
+                         selection, min_train, profile):
     st.warning("Settings changed since the last run — press **Run prediction** to update the results.")
 
 # --- unpack the run --------------------------------------------------------
@@ -278,6 +280,7 @@ with ic2:
 st.divider()
 st.caption(f"Dataset: {features['round'].nunique()} rounds, {len(features)} driver-race records. "
            f"Features: {', '.join(predict_race.FEATURES)}")
+wc.tuned_params_expander(result, {"gain": "Gain", "direct": "Direct"})
 wc.log_expander("Season data log", result["season_log"])
 if result["prep_log"].strip():
     wc.log_expander("Weekend download log", result["prep_log"])
