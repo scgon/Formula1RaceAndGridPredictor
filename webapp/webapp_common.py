@@ -1,17 +1,23 @@
 """Streamlit glue for the F1 prediction web app.
 
 No pipeline logic lives here — this module only wires the two pipelines
-(predict_race / predict_grid, both built on f1_common) into Streamlit:
-stdout capture for live download logs, and cached wrappers around data
-loading, feature building, backtests, final predictions and feature
-importance so interacting with widgets does not restart minutes of work.
+(predict_race / predict_grid, both built on f1_common) into Streamlit.
 
-Cache keys include a per-page `data_version` (bumped by the "reload data"
-button) and a `force_refresh` flag (the CLI --refresh equivalent).
+Execution is button-gated: changing a widget never starts the pipeline.
+Pressing **Run prediction** executes the whole pipeline once and stores a
+render bundle in st.session_state; every rerun afterwards just renders from
+that bundle. **Reload season data** refreshes the data layer only (it can
+download newly completed rounds, or a full re-download when the force
+checkbox is set — the checkbox alone never triggers a download).
+
+Because the data layer is not Streamlit-cached, collect/download progress is
+streamed live into a log element: collect_season prints the round it is
+currently fetching (round number + event name) before each download.
 """
 
 import io
 import sys
+import time
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -46,18 +52,21 @@ class TargetUnavailable(Exception):
 # ---------------------------------------------------------------------------
 
 @contextmanager
-def capture_stdout():
+def capture_stdout(log_element=None, refresh_secs=0.3):
     """Collect everything printed inside the block into a StringIO.
 
-    Nested captures tee their text into the parent capture (or the real
-    console), so download progress stays visible on the server terminal.
-    Cached pipeline stages capture their own logs and return them for display;
-    no Streamlit element is ever touched inside a cached function.
+    If log_element is an st.empty placeholder, its content is refreshed live
+    (throttled) while the block runs. Nested captures tee their text into
+    their parent (or the real console), so progress printed by inner helpers
+    of an outer capture still streams into the outer log element.
     """
     buffer = io.StringIO()
     parent = sys.stdout
 
     class _Writer(io.TextIOBase):
+        def __init__(self):
+            self._last = 0.0
+
         def write(self, text):
             buffer.write(text)
             if parent is not None:
@@ -68,21 +77,40 @@ def capture_stdout():
                         parent.write(text)
                 except Exception:
                     pass
+            self._update_element()
             return len(text)
 
         def write_raw(self, text):
             buffer.write(text)
+            self._update_element()
             return len(text)
+
+        def _update_element(self):
+            if log_element is not None:
+                now = time.time()
+                if now - self._last >= refresh_secs:
+                    self._last = now
+                    try:
+                        log_element.code(buffer.getvalue(), language=None)
+                    except Exception:
+                        pass
 
     sys.stdout = _Writer()
     try:
         yield buffer
     finally:
         sys.stdout = parent
+        if log_element is not None:
+            text = buffer.getvalue()
+            try:
+                if text:
+                    log_element.code(text, language=None)
+            except Exception:
+                pass
 
 
 # ---------------------------------------------------------------------------
-# cached pipeline access
+# cached lookups (no elements, no downloads of session data)
 # ---------------------------------------------------------------------------
 
 @st.cache_resource(show_spinner=False)
@@ -93,12 +121,40 @@ def get_schedule(year):
 
 
 @st.cache_resource(show_spinner=False)
-def load_season(kind, year, data_version, force_refresh=False):
-    """Collect season data for one pipeline ("race" / "grid").
+def team_colors(year):
+    """Team name -> hex color, taken straight from fastf1 session results
+    (the same source the notebooks use). Most recent completed round wins."""
+    import fastf1
+    f1_common.setup()
+    rounds = f1_common.completed_rounds(get_schedule(year))
+    for rn, _name in reversed(rounds):
+        try:
+            session = fastf1.get_session(year, rn, "R")
+            session.load(laps=False, telemetry=False, weather=False, messages=False)
+            colors = {t: "#" + c for t, c in
+                      zip(session.results["TeamName"], session.results["TeamColor"])
+                      if isinstance(c, str) and c}
+            if colors:
+                return colors
+        except Exception:
+            continue
+    return {}
 
-    Falls back to the previous year if the requested season has no completed
-    rounds yet, mirroring the CLI. Returns {year, data, schedule, log}.
-    """
+
+def completed_round_numbers(schedule):
+    """Calendar-based completed rounds (race started >COMPLETION_BUFFER ago)."""
+    return [rn for rn, _name in f1_common.completed_rounds(schedule)]
+
+
+# ---------------------------------------------------------------------------
+# data + pipeline execution (uncached — runs only on button press)
+# ---------------------------------------------------------------------------
+
+def load_season(kind, year, force_refresh=False):
+    """Collect season data for one pipeline ("race" / "grid"), reusing the
+    local CSV cache; falls back to the previous year if the requested season
+    has no completed rounds yet, mirroring the CLI. Returns
+    {year, data, schedule, log}; data is None when nothing is available."""
     mod = MODULES[kind]
     with capture_stdout() as log:
         used_year = year
@@ -134,57 +190,85 @@ def resolve_target(kind, selection, year, schedule, data):
     return target, mode, event_name, log.getvalue()
 
 
-@st.cache_resource(show_spinner=False)
-def prepare_features(kind, year, data_version, force_refresh, target, mode, event_name):
+def prepare_features(kind, season, target, mode, event_name):
     """Season data + (in pre mode) the upcoming round, turned into features."""
     mod = MODULES[kind]
-    season = load_season(kind, year, data_version, force_refresh)
     data = season["data"]
     with capture_stdout() as log:
         if mode == "pre":
             if kind == "race":
-                upcoming = mod.load_upcoming_round(year, target, event_name)
+                upcoming = mod.load_upcoming_round(season["year"], target, event_name)
             else:
                 completed = sorted(data["round"].unique())
                 fallback = data[data["round"] == completed[-1]]
-                upcoming = mod.load_upcoming_round(year, target, event_name, fallback)
+                upcoming = mod.load_upcoming_round(season["year"], target, event_name, fallback)
             data = pd.concat([data[data["round"] != target], upcoming], ignore_index=True)
         features = mod.build_features(data)
     return {"features": features, "log": log.getvalue()}
 
 
-@st.cache_resource(show_spinner=False)
-def backtest_records(kind, year, data_version, force_refresh, target, mode,
-                     event_name, min_train_rounds):
+def run_pipeline(kind, year, data_version, force_refresh, selection, min_train):
+    """Execute the full pipeline once with the given settings.
+
+    Returns a render bundle for the page (stored in st.session_state by the
+    caller), or {"error": message} when the run failed. Download progress is
+    streamed live into a log element while data is collected.
+    """
     mod = MODULES[kind]
-    prep = prepare_features(kind, year, data_version, force_refresh, target, mode, event_name)
-    return mod.backtest_records(prep["features"], min_train_rounds)
-
-
-@st.cache_resource(show_spinner=False)
-def final_predictions(kind, year, data_version, force_refresh, target, mode, event_name):
-    mod = MODULES[kind]
-    prep = prepare_features(kind, year, data_version, force_refresh, target, mode, event_name)
-    return mod.final_predictions(prep["features"], target)
-
-
-@st.cache_resource(show_spinner=False)
-def importance_frame(kind, year, data_version, force_refresh, target, mode,
-                     event_name, model_mode):
-    mod = MODULES[kind]
-    pred = final_predictions(kind, year, data_version, force_refresh, target, mode, event_name)
-    return mod.importance_frame(pred, model_mode)
+    label = "race" if kind == "race" else "qualifying"
+    main_mode = "gain" if kind == "race" else "anchor"
+    log_box = st.empty()
+    try:
+        with capture_stdout(log_box, refresh_secs=0.3):
+            season = load_season(kind, year, force_refresh)
+            if season["data"] is None:
+                return {"error": f"No {label} data available for this or the previous season."}
+            used_year = season["year"]
+            target, mode, event_name, resolve_log = resolve_target(
+                kind, selection, used_year, season["schedule"], season["data"])
+            prep = prepare_features(kind, season, target, mode, event_name)
+        features = prep["features"]
+        with st.spinner("Running rolling backtest (one model pair per round)..."):
+            records = mod.backtest_records(features, min_train)
+        with st.spinner("Training final models and computing permutation importance..."):
+            pred = mod.final_predictions(features, target)
+            imp_main = mod.importance_frame(pred, main_mode)
+            imp_direct = mod.importance_frame(pred, "direct")
+        return {
+            "settings": (year, data_version, force_refresh, selection, min_train),
+            "requested_year": year,
+            "year": used_year,
+            "target": target,
+            "mode": mode,
+            "event": event_name,
+            "resolve_log": resolve_log,
+            "season_log": season["log"],
+            "prep_log": prep["log"],
+            "features": features,
+            "records": records,
+            "main": pred[main_mode],
+            "train_rounds": int(pred["train"]["round"].nunique()),
+            "imp_main": imp_main,
+            "imp_direct": imp_direct,
+        }
+    except TargetUnavailable as exc:
+        return {"error": str(exc)}
+    except Exception as exc:  # download failures etc.
+        return {"error": f"Pipeline failed: {type(exc).__name__}: {exc}"}
+    finally:
+        log_box.empty()
 
 
 # ---------------------------------------------------------------------------
 # UI helpers
 # ---------------------------------------------------------------------------
 
-def season_controls(kind):
-    """Sidebar season selector + data controls. Returns (year, data_version, force_refresh)."""
-    version_key = f"{kind}_data_version"
-    if version_key not in st.session_state:
-        st.session_state[version_key] = 0
+def season_inputs(kind):
+    """Sidebar season + data controls. Returns (year, force_refresh, reload_pressed).
+
+    Nothing here executes the pipeline: the force checkbox only takes effect
+    on the next Reload/Run press, and Reload refreshes the data layer only.
+    """
     year = st.number_input(
         "Season", min_value=2018, max_value=CURRENT_YEAR + 1, value=CURRENT_YEAR,
         help="First use of a different season downloads its full history (~several minutes).",
@@ -192,13 +276,16 @@ def season_controls(kind):
     )
     force_refresh = st.checkbox(
         "Force full re-download (`--refresh`)",
-        help="Ignore the local CSV cache and re-fetch every session of the season. Slow.",
+        help="Ignore the local CSV cache and re-fetch every session. Applied on the next "
+             "Reload season data or Run prediction press — checking this alone downloads nothing.",
         key=f"{kind}_refresh",
     )
-    if st.button("Reload season data", key=f"{kind}_reload",
-                 help="Re-check fastf1 for newly completed rounds (only new rounds are downloaded)."):
-        st.session_state[version_key] += 1
-    return int(year), st.session_state[version_key], force_refresh
+    reload_pressed = st.button(
+        "Reload season data", key=f"{kind}_reload",
+        help="Re-check fastf1 for newly completed rounds (only new rounds are downloaded, "
+             "everything when the force checkbox is set). Press Run prediction afterwards "
+             "to refresh the results.")
+    return int(year), force_refresh, reload_pressed
 
 
 def target_selectbox(kind, schedule, completed_rounds):
@@ -215,9 +302,67 @@ def target_selectbox(kind, schedule, completed_rounds):
     return options[choice]
 
 
+def first_backtest_control(kind, completed):
+    """Sidebar selectbox picking the first round the backtest predicts.
+
+    "Auto (recommended)" — the default — applies the pipeline default
+    (MIN_TRAIN_ROUNDS completed rounds of training data before the first
+    predicted round). An explicit round starts the backtest there, with all
+    completed rounds before it training the first model. The earliest
+    explicit round differs per pipeline: the race backtest can predict
+    round 2 (trained on round 1 only), while the qualifying anchor model
+    needs each driver's previous quali result — which round-1 entrants
+    don't have — so qualifying backtests start at round 3. Returns the
+    equivalent `min_train_rounds` for the pipeline.
+    """
+    skip = 2 if kind == "grid" else 1
+    explicit = completed[skip:]
+    options = {"Auto (recommended)": None}
+    for rn in explicit:
+        options[f"Round {rn}"] = rn
+    help_text = (f"Auto starts at the first round with the pipeline default of "
+                 f"{f1_common.MIN_TRAIN_ROUNDS} completed rounds before it. An explicit "
+                 "round starts the backtest there; all rounds before it train the "
+                 "first model.")
+    if kind == "grid":
+        help_text += (" Round 2 cannot be predicted: the anchor model needs each "
+                      "driver's previous qualifying result.")
+    choice = st.selectbox("First backtest round", list(options),
+                          key=f"{kind}_first_backtest", help=help_text)
+    selected = options[choice]
+    if selected is None:
+        return f1_common.MIN_TRAIN_ROUNDS
+    return sum(1 for r in completed if r < selected)
+
+
 def log_expander(title, text):
     with st.expander(title):
         st.code(text.strip() or "(no output)", language=None)
+
+
+def degenerate_training_note(order_desc):
+    """Caption flagging a final prediction whose models trained on a single
+    round: with the project's model settings, one round of rows is too few
+    for a single tree split, so the prediction basically reproduces
+    `order_desc` (the baseline)."""
+    st.caption(
+        f":material/info: This round's models were trained on a single round of data — "
+        f"too few rows for the model to make a single tree split, so the predictions "
+        f"below basically reproduce {order_desc}.")
+
+
+def degenerate_backtest_note(bt, train_cols, order_desc):
+    """Same caveat as degenerate_training_note, for backtest results: flags
+    every round whose models trained on fewer than two rounds."""
+    flagged = sorted(int(r) for r in bt.loc[(bt[train_cols] < 2).any(axis=1), "round"])
+    if not flagged:
+        return
+    rounds_txt = ", ".join(f"round {r}" for r in flagged)
+    were = "was" if len(flagged) == 1 else "were"
+    st.caption(
+        f":material/info: {rounds_txt} {were} predicted by models trained on a single round "
+        f"of data — too few rows for the model to make a single tree split, so those "
+        f"predictions basically reproduce {order_desc}.")
 
 
 def page_link(path, label, icon):
@@ -232,27 +377,6 @@ def page_link(path, label, icon):
 # ---------------------------------------------------------------------------
 # colors
 # ---------------------------------------------------------------------------
-
-@st.cache_resource(show_spinner=False)
-def team_colors(year):
-    """Team name -> hex color, taken straight from fastf1 session results
-    (the same source the notebooks use). Most recent completed round wins."""
-    import fastf1
-    f1_common.setup()
-    rounds = f1_common.completed_rounds(get_schedule(year))
-    for rn, _name in reversed(rounds):
-        try:
-            session = fastf1.get_session(year, rn, "R")
-            session.load(laps=False, telemetry=False, weather=False, messages=False)
-            colors = {t: "#" + c for t, c in
-                      zip(session.results["TeamName"], session.results["TeamColor"])
-                      if isinstance(c, str) and c}
-            if colors:
-                return colors
-        except Exception:
-            continue
-    return {}
-
 
 def readable_color(hex_color, fallback="#999999"):
     """Team color adjusted to stay readable as text on a white background."""
@@ -289,6 +413,16 @@ def position_css(value):
         return ""
 
 
+def zero_error_css(value):
+    """Cell style for an error column: green when the prediction was exact."""
+    if pd.isna(value):
+        return ""
+    try:
+        return "background-color: #b7f0c8; color: #0b5c2a; font-weight: 600" if float(value) == 0 else ""
+    except (TypeError, ValueError):
+        return ""
+
+
 def team_css(team, colors, bold=False):
     css = f"color: {readable_color(colors.get(team))}"
     if bold:
@@ -302,32 +436,7 @@ def bold_row_style(row):
 
 
 # ---------------------------------------------------------------------------
-# controls
-# ---------------------------------------------------------------------------
-
-def first_backtest_control(kind, completed):
-    """Sidebar selectbox picking the first round the backtest predicts.
-
-    All completed rounds before it are the training set for the first
-    backtest model. Returns the equivalent `min_train_rounds` for the
-    pipeline (number of completed rounds before the selection).
-    """
-    options = completed[1:]
-    if not options:
-        return 0
-    default = options[4] if len(options) > 4 else options[0]
-    choice = st.selectbox(
-        "First backtest round", options, index=options.index(default),
-        key=f"{kind}_first_backtest",
-        format_func=lambda rn: f"Round {rn}",
-        help="The backtest predicts every completed round from this one onwards; "
-             "all rounds before it train the first model.",
-    )
-    return sum(1 for r in completed if r < choice)
-
-
-# ---------------------------------------------------------------------------
-# notebook-style charts (Streamlit-native)
+# charts (Streamlit-native)
 # ---------------------------------------------------------------------------
 
 def predicted_order_chart(rows, cut_lines, colors, slot_label="position"):
@@ -336,7 +445,8 @@ def predicted_order_chart(rows, cut_lines, colors, slot_label="position"):
     one lane per model, team-colored driver codes placed at their predicted
     slot, dashed reference lines at the given cuts.
 
-    rows: list of (label, DataFrame, position_column), top to bottom.
+    rows: list of (label, DataFrame, position_column), top to bottom
+    (the first entry renders as the bottom lane).
     cut_lines: {position: label} for the dashed reference lines.
     colors: team -> hex color map.
     """
@@ -351,25 +461,26 @@ def predicted_order_chart(rows, cut_lines, colors, slot_label="position"):
     n_slots = int(data["position"].max())
     teams = list(dict.fromkeys(data["team"]))
     scale = alt.Scale(domain=teams, range=[colors.get(t, "#999999") for t in teams])
-    lane_order = list(reversed(lane_names))  # vega y-domain runs bottom -> top
+    lane_order = list(reversed(lane_names))  # first list entry = bottom lane
 
-    lanes = alt.Chart(data).mark_text(fontSize=12, fontWeight="bold").encode(
+    lanes = alt.Chart(data).mark_text(fontSize=16, fontWeight="bold").encode(
         x=alt.X("position:Q", title=slot_label,
                 scale=alt.Scale(domain=[0.3, n_slots + 0.7]),
                 axis=alt.Axis(values=list(range(1, n_slots + 1)), tickMinStep=1)),
-        y=alt.Y("lane:N", title=None, sort=lane_order),
+        y=alt.Y("lane:N", title=None, sort=lane_order,
+                axis=alt.Axis(labelFontSize=13)),
         text="driver:N",
         color=alt.Color("team:N", scale=scale, legend=None),
         tooltip=["lane:N", "driver:N", "team:N",
                  alt.Tooltip("position:Q", title=slot_label, format=".0f")],
-    )
+    ).properties(height=30 + 45 * len(rows))
 
     if cut_lines:
         cuts = pd.DataFrame({"position": list(cut_lines.keys()),
                              "label": list(cut_lines.values()),
                              "lane": lane_names[0]})
         rules = alt.Chart(cuts).mark_rule(color="#888888", strokeDash=[5, 5]).encode(x="position:Q")
-        cut_labels = alt.Chart(cuts).mark_text(fontSize=9, color="#888888", dy=-13).encode(
+        cut_labels = alt.Chart(cuts).mark_text(fontSize=10, color="#888888", dy=-15).encode(
             x="position:Q", y=alt.Y("lane:N", sort=lane_order), text="label:N")
         return rules + lanes + cut_labels
     return lanes

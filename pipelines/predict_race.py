@@ -189,8 +189,18 @@ def build_features(data):
     return df
 
 
-def make_model():
-    return common.make_model([FEATURES.index("team_id")])
+def usable_features(frame):
+    """FEATURES minus any column that is entirely NaN in `frame` — sklearn's
+    HistGradientBoosting cannot fit a feature with no observed values (e.g.
+    the form features when only round 1 exists, or sprint features before
+    the first sprint weekend of the season)."""
+    matrix = frame[FEATURES].to_numpy(dtype=float)
+    return [name for name, col in zip(FEATURES, matrix.T) if not np.isnan(col).all()]
+
+
+def make_model(feature_names):
+    categorical = [feature_names.index("team_id")] if "team_id" in feature_names else []
+    return common.make_model(categorical)
 
 
 def train_model(features, target_round, mode="gain"):
@@ -205,15 +215,17 @@ def train_model(features, target_round, mode="gain"):
         target = (train["finish"] - train["grid"]).to_numpy(dtype=float)
     else:
         target = train["finish"].to_numpy(dtype=float)
-    model = make_model()
-    model.fit(train[FEATURES].to_numpy(dtype=float), target)
-    return model, train
+    used = usable_features(train)
+    model = make_model(used)
+    model.fit(train[used].to_numpy(dtype=float), target)
+    return model, train, used
 
 
-def predict_round(model, features, target_round, mode="gain"):
+def predict_round(model, features, target_round, mode="gain", use_features=None):
+    use_features = FEATURES if use_features is None else use_features
     rows = features[(features["round"] == target_round) & features["grid"].notna()].copy()
     rows = rows.sort_values(["grid", "driver_number"])
-    rows["model_output"] = model.predict(rows[FEATURES].to_numpy(dtype=float))
+    rows["model_output"] = model.predict(rows[use_features].to_numpy(dtype=float))
     if mode == "gain":
         rows["pred_finish"] = rows["grid"] + rows["model_output"]
     else:
@@ -236,7 +248,8 @@ def backtest_records(features, min_train_rounds):
     """Rolling backtest of gain vs direct model; one metrics dict per predicted round.
 
     Alongside the CLI-reported metrics, each record carries the podium
-    points and the predicted/actual winner names used by the web app.
+    points, the predicted/actual winner names and the number of rounds each
+    model trained on (used by the web app).
     """
     rounds = sorted(features["round"].unique())
     records = []
@@ -244,12 +257,12 @@ def backtest_records(features, min_train_rounds):
         if sum(1 for x in rounds if x < r) < min_train_rounds:
             continue
         try:
-            gain_model, _ = train_model(features, r, "gain")
-            direct_model, _ = train_model(features, r, "direct")
+            gain_model, gain_train, gain_used = train_model(features, r, "gain")
+            direct_model, direct_train, direct_used = train_model(features, r, "direct")
         except ValueError:
             continue
-        gain = predict_round(gain_model, features, r, "gain")
-        direct = predict_round(direct_model, features, r, "direct")
+        gain = predict_round(gain_model, features, r, "gain", gain_used)
+        direct = predict_round(direct_model, features, r, "direct", direct_used)
         gain_scored = gain[gain["finish"].notna()]
         direct_scored = direct[direct["finish"].notna()]
         winner_row = features.loc[(features["round"] == r) & (features["finish"] == 1), "driver"]
@@ -280,6 +293,8 @@ def backtest_records(features, min_train_rounds):
             "gain_top1": gain_top3[0],
             "direct_top1": direct_top3[0],
             "actual_top1": winner,
+            "gain_train_rounds": int(gain_train["round"].nunique()),
+            "direct_train_rounds": int(direct_train["round"].nunique()),
         })
     return records
 
@@ -318,28 +333,32 @@ def final_predictions(features, target):
     """Train both models on rounds before `target` and predict `target`.
 
     Returns models, the training set and both prediction frames; the gain
-    frame carries a direct_pos column for side-by-side display.
+    frame carries a direct_pos column for side-by-side display. The feature
+    lists actually used by each model (all-NaN training columns dropped)
+    are returned as gain_features / direct_features.
     """
-    gain_model, train_set = train_model(features, target, "gain")
-    direct_model, _ = train_model(features, target, "direct")
-    gain = predict_round(gain_model, features, target, "gain")
-    direct = predict_round(direct_model, features, target, "direct")
+    gain_model, train_set, gain_used = train_model(features, target, "gain")
+    direct_model, _, direct_used = train_model(features, target, "direct")
+    gain = predict_round(gain_model, features, target, "gain", gain_used)
+    direct = predict_round(direct_model, features, target, "direct", direct_used)
     gain["direct_pos"] = gain["driver"].map(direct.set_index("driver")["pred_pos"]).astype(int)
     return {"gain_model": gain_model, "direct_model": direct_model,
-            "train": train_set, "gain": gain, "direct": direct}
+            "train": train_set, "gain": gain, "direct": direct,
+            "gain_features": gain_used, "direct_features": direct_used}
 
 
 def importance_frame(pred, mode="gain"):
     """Permutation importance for one of the final models, as a DataFrame."""
     train = pred["train"]
-    X = train[FEATURES].to_numpy(dtype=float)
     if mode == "gain":
+        used = pred["gain_features"]
         target = (train["finish"] - train["grid"]).to_numpy(dtype=float)
         model = pred["gain_model"]
     else:
+        used = pred["direct_features"]
         target = train["finish"].to_numpy(dtype=float)
         model = pred["direct_model"]
-    return common.importance_scores(model, FEATURES, X, target)
+    return common.importance_scores(model, used, train[used].to_numpy(dtype=float), target)
 
 
 def final_report(features, year, target, event_name, mode):
@@ -370,11 +389,12 @@ def final_report(features, year, target, event_name, mode):
         print(f"Predicted winner (gain model)   : {gain.iloc[0]['driver']}")
         print(f"Predicted winner (direct model) : {gain.sort_values('direct_pos').iloc[0]['driver']}")
     train = pred["train"]
-    X = train[FEATURES].to_numpy(dtype=float)
-    common.importance_report(pred["gain_model"], FEATURES, X,
+    common.importance_report(pred["gain_model"], pred["gain_features"],
+                             train[pred["gain_features"]].to_numpy(dtype=float),
                              (train["finish"] - train["grid"]).to_numpy(dtype=float),
                              "gain", width=22)
-    common.importance_report(pred["direct_model"], FEATURES, X,
+    common.importance_report(pred["direct_model"], pred["direct_features"],
+                             train[pred["direct_features"]].to_numpy(dtype=float),
                              train["finish"].to_numpy(dtype=float),
                              "direct", width=22)
 

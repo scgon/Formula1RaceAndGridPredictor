@@ -2,6 +2,8 @@
 
 Two independent ML pipelines for predicting F1 race results and qualifying grids using historical data from [fastf1](https://github.com/theOehrly/fastf1), plus a Streamlit web app to explore their predictions.
 
+**Live web app:** https://formula1predictions.streamlit.app
+
 ## Project Layout
 
 ```
@@ -15,14 +17,13 @@ Two independent ML pipelines for predicting F1 race results and qualifying grids
 │   ├── page_home.py         # homepage: next race, cached-data status, methodology
 │   ├── page_race.py         # race prediction page
 │   ├── page_quali.py        # qualifying prediction page
-│   └── webapp_common.py     # app-only glue: cached wrappers, stdout capture (no pipeline logic)
+│   └── webapp_common.py     # app-only glue: run_pipeline, live stdout capture, table/chart helpers (no pipeline logic)
 ├── notebooks/               # interactive inline copies of the pipelines
 │   ├── race_predictions.ipynb
 │   └── grid_predictions.ipynb
 ├── data/                    # per-season CSV caches (auto-created, gitignored)
 ├── cache/                   # fastf1 HTTP/session cache (auto-created, gitignored)
-├── requirements.txt
-└── LICENSE
+├── requirements.txt  AGENTS.md  LICENSE
 ```
 
 `f1_common.py` holds everything both pipelines need — fastf1 cache setup, qualifying-lap extraction, practice-lap features, the season CSV cache, the model factory and permutation importance. The pipelines stay independent entry points with their own features, targets and models. The web app builds on the same pipeline functions, so CLI and web results are identical by construction.
@@ -61,15 +62,17 @@ Three pages:
 | Page | Content |
 |------|---------|
 | **Home** | Next race on the calendar, cached-data status, methodology overview |
-| **Race prediction** | Gain vs direct prediction table, error-by-round & rank-correlation charts, final predicted order diagram, backtest metrics, podium points and predicted-winner tables, feature importance |
-| **Qualifying prediction** | Anchor vs direct prediction table, error-by-round & rank-correlation charts, final predicted grids diagram, backtest metrics, pole points and predicted-pole tables, feature importance |
+| **Race prediction** | Gain vs direct prediction table, error-by-round chart, final predicted order diagram, backtest metrics, podium points and predicted-winner tables, feature importance |
+| **Qualifying prediction** | Anchor vs direct prediction table, error-by-round chart, final predicted grids diagram, backtest metrics, pole points and predicted-pole tables, feature importance |
 
 Presentation notes:
-- Review mode (already-completed rounds) sorts rows by the actual result; prediction mode by the model's order. Table cells hold numeric values displayed as `P{n}`, so column sorting works numerically.
+- Runs are explicit: change any setting and press **Run prediction** — changing a widget never starts the pipeline. **Reload season data** refreshes the underlying data (downloading newly completed rounds, or everything when *Force full re-download* is checked — checking the box alone downloads nothing), and the round currently downloading (number + event name) is shown live in a log while data loads.
+- Review mode (already-completed rounds) sorts rows by the actual result; prediction mode by the model's order. Table cells hold numeric values displayed as `P{n}`, so column sorting works numerically, and exact predictions (error 0) are highlighted green.
 - P1/P2/P3 cells are colored gold/silver/bronze; driver and team names are colored with official team colors (from fastf1).
-- Scoring: race podium points (+15 exact position, +5 wrong slot, +100 perfect podium) and quali pole points (+15 correct pole), with per-round and season totals.
+- Scoring: race podium points (+15 exact position, +5 wrong slot, +100 perfect podium) and quali pole points (+15 correct pole), with per-round results plus season-total and average-per-round rows.
+- Rounds predicted from a single round of training data (round 2 for races, round 3 for qualifying) are flagged in-app: with so few rows the models cannot make a single tree split, so those predictions effectively reproduce the baseline (grid / last-quali) order.
 
-Each prediction page lets you pick the season and target round (auto / next on the calendar / any specific round) in the sidebar. Results are cached in-process, so tweaking widgets does not retrain models; use **Reload season data** to pick up newly completed rounds, or **Force full re-download** for the `--refresh` behaviour.
+Each prediction page lets you pick the season, the target round (auto / next on the calendar / any specific round) and the first backtest round (auto — recommended — or any specific round; earliest selectable: round 2 for races, round 3 for qualifying) in the sidebar.
 
 ## Quick Start (CLI)
 
@@ -124,7 +127,7 @@ $PY -m nbconvert --to notebook --execute --inplace notebooks/grid_predictions.ip
 ## Requirements
 
 - Python 3.10+ (tested on 3.14 via miniconda)
-- `fastf1`, `pandas`, `numpy`, `scikit-learn`, `streamlit`
+- `fastf1`, `pandas`, `numpy`, `scikit-learn`, `streamlit`, `matplotlib` (notebook charts)
 - All deps pre-installed in the miniconda env at `/opt/homebrew/Caskroom/miniconda/base/bin/python`
 
 ## Architecture Notes

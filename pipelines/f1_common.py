@@ -174,6 +174,7 @@ def collect_season(year, schedule, *, filename, required_columns, result_column,
 
     frames = []
     for rn, name in todo:
+        print(f"  fetching round {rn:>2}  {name} ...")
         try:
             frame = load_round(year, rn, name)
         except Exception as exc:

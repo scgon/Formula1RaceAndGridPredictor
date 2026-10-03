@@ -15,6 +15,10 @@ import predict_grid
 import webapp_common as wc
 
 KIND = "grid"
+VERSION_KEY = f"{KIND}_data_version"
+RESULT_KEY = f"{KIND}_result"
+ERROR_KEY = f"{KIND}_run_error"
+NOTICE_KEY = f"{KIND}_reload_notice"
 
 st.title("Qualifying Prediction")
 st.caption("Predicts the qualifying classification. **Anchor model**: change vs each driver's "
@@ -23,58 +27,68 @@ st.caption("Predicts the qualifying classification. **Anchor model**: change vs 
            "Day-before-quali constraint: only FP1/FP2 and sprint qualifying feed the features — "
            "never FP3 or the sprint race.")
 
-# --- sidebar controls ------------------------------------------------------
+if VERSION_KEY not in st.session_state:
+    st.session_state[VERSION_KEY] = 0
+
+# --- sidebar ---------------------------------------------------------------
 with st.sidebar:
     st.header("Settings")
-    year, data_version, force_refresh = wc.season_controls(KIND)
-
-# --- data ------------------------------------------------------------------
-with st.spinner("Loading season data (newly completed rounds are downloaded — this can take minutes on first use)..."):
-    season = wc.load_season(KIND, year, data_version, force_refresh)
-
-if season["data"] is None:
-    st.error("No qualifying data available for this or the previous season.")
-    st.stop()
-
-used_year = season["year"]
-data = season["data"]
-schedule = season["schedule"]
-if used_year != year:
-    st.warning(f"No completed weekends in {year} yet — showing the {used_year} season instead.")
-
-completed = sorted(int(r) for r in data["round"].unique())
-
-with st.sidebar:
+    year, force_refresh, reload_pressed = wc.season_inputs(KIND)
+    schedule = wc.get_schedule(year)
+    completed = wc.completed_round_numbers(schedule)
     selection = wc.target_selectbox(KIND, schedule, set(completed))
     min_train = wc.first_backtest_control(KIND, completed)
+    run_pressed = st.button("Run prediction", type="primary", key=f"{KIND}_run",
+                            help="Execute the pipeline with the current settings — "
+                                 "changing settings never starts it automatically.")
 
-try:
-    target, mode, event_name, resolve_log = wc.resolve_target(KIND, selection, used_year, schedule, data)
-except wc.TargetUnavailable as exc:
-    st.error(str(exc))
-    wc.log_expander("Season data log", season["log"])
+# --- explicit actions (widgets alone never start anything) ------------------
+if reload_pressed:
+    st.session_state[VERSION_KEY] += 1
+    log_box = st.empty()
+    with wc.capture_stdout(log_box, refresh_secs=0.3):
+        wc.load_season(KIND, year, force_refresh)
+    log_box.empty()
+    st.session_state[NOTICE_KEY] = True
+
+if run_pressed:
+    result = wc.run_pipeline(KIND, year, st.session_state[VERSION_KEY],
+                             force_refresh, selection, min_train)
+    if "error" in result:
+        st.session_state[ERROR_KEY] = result["error"]
+    else:
+        st.session_state[RESULT_KEY] = result
+        st.session_state[ERROR_KEY] = None
+
+if st.session_state.pop(NOTICE_KEY, False):
+    st.success("Season data reloaded — press **Run prediction** to refresh the results.")
+
+if st.session_state.get(ERROR_KEY):
+    st.error(st.session_state[ERROR_KEY])
+
+result = st.session_state.get(RESULT_KEY)
+if result is None:
+    if not st.session_state.get(ERROR_KEY):
+        st.info("Configure the season and target round in the sidebar, then press "
+                "**Run prediction**.")
     st.stop()
 
-common_args = (KIND, used_year, data_version, force_refresh, target, mode, event_name)
+if result["settings"] != (year, st.session_state[VERSION_KEY], force_refresh, selection, min_train):
+    st.warning("Settings changed since the last run — press **Run prediction** to update the results.")
 
-# --- pipeline --------------------------------------------------------------
-try:
-    with st.spinner("Preparing features (downloads FP1/FP2 and sprint-quali sessions in pre-quali mode)..."):
-        prep = wc.prepare_features(*common_args)
+# --- unpack the run --------------------------------------------------------
+used_year = result["year"]
+if used_year != result["requested_year"]:
+    st.warning(f"No completed weekends in {result['requested_year']} yet — showing the {used_year} season instead.")
 
-    with st.spinner("Running rolling backtest (one model pair per round)..."):
-        records = wc.backtest_records(*common_args, min_train)
-
-    with st.spinner("Training final models and computing permutation importance..."):
-        pred = wc.final_predictions(*common_args)
-        imp_anchor = wc.importance_frame(*common_args, "anchor")
-        imp_direct = wc.importance_frame(*common_args, "direct")
-except Exception as exc:  # download failures etc.
-    st.error(f"Pipeline failed: {type(exc).__name__}: {exc}")
-    st.stop()
-
-features = prep["features"]
-anchor = pred["anchor"]
+target = result["target"]
+mode = result["mode"]
+event_name = result["event"]
+features = result["features"]
+records = result["records"]
+anchor = result["main"]
+imp_anchor = result["imp_main"]
+imp_direct = result["imp_direct"]
 colors = wc.team_colors(used_year)
 
 # --- header ----------------------------------------------------------------
@@ -88,8 +102,11 @@ else:
     st.caption("This qualifying is already completed — models were trained only on earlier rounds, "
                "so this is a genuine out-of-sample review. Rows are sorted by the actual result.")
 
-if resolve_log.strip():
-    st.caption(resolve_log.strip())
+if result["resolve_log"].strip():
+    st.caption(result["resolve_log"].strip())
+
+if result["train_rounds"] < 2:
+    wc.degenerate_training_note("the last-quali order")
 
 # --- prediction table ------------------------------------------------------
 if mode == "post":
@@ -122,6 +139,8 @@ styled = disp.style.format(fmt, na_rep="")
 for col in ("Anchor model", "Direct model", "Actual"):
     if col in disp.columns:
         styled = styled.map(wc.position_css, subset=[col])
+if mode == "post":
+    styled = styled.map(wc.zero_error_css, subset=["Error (anchor)", "Error (direct)"])
 styled = styled.map(lambda t: wc.team_css(t, colors, bold=True), subset=["Driver"])
 styled = styled.map(lambda t: wc.team_css(t, colors), subset=["Team"])
 st.dataframe(styled, width="stretch", hide_index=True)
@@ -139,11 +158,12 @@ lanes = [("anchor model", anchor, "pred_pos"), ("direct model", anchor, "direct_
 lanes.append(("actual grid" if mode == "post" else "last quali grid",
               anchor, "quali_pos" if mode == "post" else "quali_pos_last"))
 chart = wc.predicted_order_chart(
-    lanes, {10.5: "Q3 cut", 15.5: "Q2 cut"}, colors, "grid slot")
+    lanes, {10.5: "Q3 cut", 16.5: "Q2 cut"}, colors, "grid slot")
 st.altair_chart(chart, theme="streamlit", width="stretch")
 st.caption("Driver codes sit at each model's predicted grid slot "
-           "(top lane = anchor model, bottom = actual grid or last quali grid); "
-           "dashed lines mark the Q3 and Q2 cuts.")
+           "(bottom lane = anchor model, middle = direct model, "
+           "top lane = actual grid or last quali grid); "
+           "dashed lines mark the cuts — P1–P10 reach Q3, P1–P16 reach Q2.")
 
 # --- backtest --------------------------------------------------------------
 st.divider()
@@ -185,18 +205,14 @@ else:
     st.caption(f"Rank correlation over {n} predicted qualifying sessions — anchor: **{m['anchor_corr']:.2f}**, "
                f"direct: **{m['direct_corr']:.2f}**")
 
-    c1, c2 = st.columns(2)
+    wc.degenerate_backtest_note(bt, ["anchor_train_rounds", "direct_train_rounds"],
+                                "the last-quali order")
+
+    st.markdown("**Qualifying prediction error by round**")
     mae_df = bt.set_index("round")[["anchor_mae", "direct_mae", "persistence_mae"]].rename(columns={
         "anchor_mae": "Anchor model", "direct_mae": "Direct model",
         "persistence_mae": "Last-quali baseline"})
-    corr_df = bt.set_index("round")[["anchor_corr", "direct_corr"]].rename(columns={
-        "anchor_corr": "Anchor model", "direct_corr": "Direct model"})
-    with c1:
-        st.markdown("**Qualifying prediction error by round**")
-        st.bar_chart(mae_df, x_label="Round", y_label="MAE (positions)")
-    with c2:
-        st.markdown("**Rank correlation with the actual qualifying order**")
-        st.bar_chart(corr_df, x_label="Round", y_label="Spearman rho")
+    st.bar_chart(mae_df, x_label="Round", y_label="MAE (positions)", stack=False)
 
     with st.expander("Per-round backtest table"):
         table = bt[["round", "event", "anchor_mae", "direct_mae", "persistence_mae",
@@ -215,13 +231,17 @@ else:
     pts = bt[["round", "event", "anchor_points", "direct_points"]].copy()
     pts.columns = ["Round", "Event", "Anchor model", "Direct model"]
     pts["Round"] = pts["Round"].astype("Int64")
-    totals = pd.DataFrame([{
-        "Round": pd.NA, "Event": "Season total",
-        "Anchor model": pts["Anchor model"].sum(),
-        "Direct model": pts["Direct model"].sum(),
-    }])
-    pts = pd.concat([pts, totals], ignore_index=True)
-    styled = pts.style.format({"Round": "{:.0f}"}, na_rep="").apply(wc.bold_row_style, subset=pd.IndexSlice[len(pts) - 1, :])
+    summary = pd.DataFrame([
+        {"Round": pd.NA, "Event": "Season total",
+         "Anchor model": bt["anchor_points"].sum(), "Direct model": bt["direct_points"].sum()},
+        {"Round": pd.NA, "Event": "Average per round",
+         "Anchor model": bt["anchor_points"].mean(), "Direct model": bt["direct_points"].mean()},
+    ])
+    pts = pd.concat([pts, summary], ignore_index=True)
+    points_fmt = lambda v: "" if pd.isna(v) else f"{v:g}"
+    styled = (pts.style
+              .format({"Round": "{:.0f}", "Anchor model": points_fmt, "Direct model": points_fmt}, na_rep="")
+              .apply(wc.bold_row_style, subset=pd.IndexSlice[len(pts) - 2:, :]))
     st.dataframe(styled, width="stretch", hide_index=True)
 
     # --- predicted pole table -------------------------------------------------
@@ -260,6 +280,6 @@ with ic2:
 st.divider()
 st.caption(f"Dataset: {features['round'].nunique()} rounds, {len(features)} driver-quali records. "
            f"Features: {', '.join(predict_grid.FEATURES)}")
-wc.log_expander("Season data log", season["log"])
-if prep["log"].strip():
-    wc.log_expander("Weekend download log", prep["log"])
+wc.log_expander("Season data log", result["season_log"])
+if result["prep_log"].strip():
+    wc.log_expander("Weekend download log", result["prep_log"])

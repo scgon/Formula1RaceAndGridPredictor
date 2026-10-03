@@ -213,8 +213,18 @@ def anchor_value(rows):
     return rows["quali_pos_last"].fillna(rows["quali_form_season"]).fillna(NEUTRAL_POSITION)
 
 
-def make_model():
-    return common.make_model([FEATURES.index("team_id")])
+def usable_features(frame):
+    """FEATURES minus any column that is entirely NaN in `frame` — sklearn's
+    HistGradientBoosting cannot fit a feature with no observed values (e.g.
+    the quali form features when only round 1 exists, or sprint quali
+    features before the first sprint weekend of the season)."""
+    matrix = frame[FEATURES].to_numpy(dtype=float)
+    return [name for name, col in zip(FEATURES, matrix.T) if not np.isnan(col).all()]
+
+
+def make_model(feature_names):
+    categorical = [feature_names.index("team_id")] if "team_id" in feature_names else []
+    return common.make_model(categorical)
 
 
 def train_model(features, target_round, mode="anchor"):
@@ -233,15 +243,17 @@ def train_model(features, target_round, mode="anchor"):
         target = train["quali_pos"].to_numpy(dtype=float)
     if train.empty:
         raise ValueError(f"no training data before round {target_round}")
-    model = make_model()
-    model.fit(train[FEATURES].to_numpy(dtype=float), target)
-    return model, train
+    used = usable_features(train)
+    model = make_model(used)
+    model.fit(train[used].to_numpy(dtype=float), target)
+    return model, train, used
 
 
-def predict_round(model, features, target_round, mode="anchor"):
+def predict_round(model, features, target_round, mode="anchor", use_features=None):
+    use_features = FEATURES if use_features is None else use_features
     rows = features[features["round"] == target_round].copy()
     rows = rows.sort_values(["driver_number"])
-    rows["model_output"] = model.predict(rows[FEATURES].to_numpy(dtype=float))
+    rows["model_output"] = model.predict(rows[use_features].to_numpy(dtype=float))
     if mode == "anchor":
         anchor = anchor_value(rows)
         rows["anchor"] = anchor
@@ -256,8 +268,8 @@ def backtest_records(features, min_train_rounds):
     """Rolling backtest of anchor vs direct model; one metrics dict per predicted round.
 
     Alongside the CLI-reported metrics, each record carries the pole points
-    (+15 for a correctly predicted pole) and the predicted/actual pole names
-    used by the web app.
+    (+15 for a correctly predicted pole), the predicted/actual pole names
+    and the number of rounds each model trained on (used by the web app).
     """
     rounds = sorted(features["round"].unique())
     records = []
@@ -265,12 +277,12 @@ def backtest_records(features, min_train_rounds):
         if sum(1 for x in rounds if x < r) < min_train_rounds:
             continue
         try:
-            anchor_model, _ = train_model(features, r, "anchor")
-            direct_model, _ = train_model(features, r, "direct")
+            anchor_model, anchor_train, anchor_used = train_model(features, r, "anchor")
+            direct_model, direct_train, direct_used = train_model(features, r, "direct")
         except ValueError:
             continue
-        anchor = predict_round(anchor_model, features, r, "anchor")
-        direct = predict_round(direct_model, features, r, "direct")
+        anchor = predict_round(anchor_model, features, r, "anchor", anchor_used)
+        direct = predict_round(direct_model, features, r, "direct", direct_used)
         anchor_scored = anchor[anchor["quali_pos"].notna()]
         direct_scored = direct[direct["quali_pos"].notna()]
         pole_row = features.loc[(features["round"] == r) & (features["quali_pos"] == 1), "driver"]
@@ -298,6 +310,8 @@ def backtest_records(features, min_train_rounds):
             "anchor_top1": anchor_top1,
             "direct_top1": direct_top1,
             "actual_top1": pole,
+            "anchor_train_rounds": int(anchor_train["round"].nunique()),
+            "direct_train_rounds": int(direct_train["round"].nunique()),
         })
     return records
 
@@ -334,28 +348,32 @@ def final_predictions(features, target):
     """Train both models on rounds before `target` and predict `target`.
 
     Returns models, the anchor training set and both prediction frames; the
-    anchor frame carries a direct_pos column for side-by-side display.
+    anchor frame carries a direct_pos column for side-by-side display. The
+    feature lists actually used by each model (all-NaN training columns
+    dropped) are returned as anchor_features / direct_features.
     """
-    anchor_model, train_set = train_model(features, target, "anchor")
-    direct_model, _ = train_model(features, target, "direct")
-    anchor = predict_round(anchor_model, features, target, "anchor")
-    direct = predict_round(direct_model, features, target, "direct")
+    anchor_model, train_set, anchor_used = train_model(features, target, "anchor")
+    direct_model, _, direct_used = train_model(features, target, "direct")
+    anchor = predict_round(anchor_model, features, target, "anchor", anchor_used)
+    direct = predict_round(direct_model, features, target, "direct", direct_used)
     anchor["direct_pos"] = anchor["driver"].map(direct.set_index("driver")["pred_pos"]).astype(int)
     return {"anchor_model": anchor_model, "direct_model": direct_model,
-            "train": train_set, "anchor": anchor, "direct": direct}
+            "train": train_set, "anchor": anchor, "direct": direct,
+            "anchor_features": anchor_used, "direct_features": direct_used}
 
 
 def importance_frame(pred, mode="anchor"):
     """Permutation importance for one of the final models, as a DataFrame."""
     train = pred["train"]
-    X = train[FEATURES].to_numpy(dtype=float)
     if mode == "anchor":
+        used = pred["anchor_features"]
         target = (train["quali_pos"] - train["quali_pos_last"]).to_numpy(dtype=float)
         model = pred["anchor_model"]
     else:
+        used = pred["direct_features"]
         target = train["quali_pos"].to_numpy(dtype=float)
         model = pred["direct_model"]
-    return common.importance_scores(model, FEATURES, X, target)
+    return common.importance_scores(model, used, train[used].to_numpy(dtype=float), target)
 
 
 def final_report(features, year, target, event_name, mode):
@@ -384,11 +402,12 @@ def final_report(features, year, target, event_name, mode):
         if not pole_rows.empty:
             print(f"Actual pole                     : {pole_rows.iloc[0]}")
     train = pred["train"]
-    X = train[FEATURES].to_numpy(dtype=float)
-    common.importance_report(pred["anchor_model"], FEATURES, X,
+    common.importance_report(pred["anchor_model"], pred["anchor_features"],
+                             train[pred["anchor_features"]].to_numpy(dtype=float),
                              (train["quali_pos"] - train["quali_pos_last"]).to_numpy(dtype=float),
                              "anchor", width=24)
-    common.importance_report(pred["direct_model"], FEATURES, X,
+    common.importance_report(pred["direct_model"], pred["direct_features"],
+                             train[pred["direct_features"]].to_numpy(dtype=float),
                              train["quali_pos"].to_numpy(dtype=float),
                              "direct", width=24)
 

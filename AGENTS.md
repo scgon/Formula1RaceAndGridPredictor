@@ -4,7 +4,7 @@
 
 - **Interpreter**: `/opt/homebrew/Caskroom/miniconda/base/bin/python` (Python 3.14, all deps installed). Do NOT rely on `python3` from PATH — on a fresh shell it can resolve to macOS system Python, which has none of the packages. PyCharm uses this same miniconda SDK.
 - **GitHub CLI**: `/opt/homebrew/bin/gh` (authenticated as `scgon`); often not on PATH.
-- No tests, lint, or typecheck exist. Verification = a full script run (pipelines) or an AppTest run (web app).
+- No tests, lint, or typecheck exist. Verification = a full script run (pipelines), an AppTest run (web app), or a CLI-output parity diff (pipeline edits).
 
 ## File layout
 
@@ -19,13 +19,13 @@
 │   ├── page_home.py
 │   ├── page_race.py
 │   ├── page_quali.py
-│   └── webapp_common.py     # app-only glue (cached wrappers, stdout capture)
+│   └── webapp_common.py     # app-only glue (run_pipeline, stdout capture, table/chart helpers)
 ├── notebooks/               # inline copies of the pipelines (manual sync)
 ├── data/  cache/            # season CSVs and fastf1 cache (repo root, gitignored)
 ├── requirements.txt  README.md  LICENSE
 ```
 
-Every webapp/pipeline script self-bootstraps `sys.path` (`webapp/` + `pipelines/`), so files can be run directly from the repo root without installation. `f1_common.BASE_DIR` points at the repo root, so `cache/` and `data/` are shared by pipelines, web app and notebooks no matter where each is executed from.
+Page scripts and `webapp_common` self-bootstrap `sys.path` (`webapp/` + `pipelines/`), so they run from the repo root without installation; `app.py` needs no bootstrap (imports only streamlit). `f1_common.BASE_DIR` points at the repo root, so `cache/` and `data/` are shared by pipelines, web app and notebooks no matter where each is executed from.
 
 ## Commands
 
@@ -48,15 +48,21 @@ Shared CLI flags: `--season YEAR`, `--predict-round N`, `--next` (next race/qual
 - `pipelines/f1_common.py` — shared machinery for both pipelines and the web app: fastf1 cache setup, UTC/session-time helpers (`utc_now`, `session_utc`, `completed_rounds`), quali-lap extraction (`best_quali_seconds`, `pole_seconds`), practice-lap features (`practice_features(year, rnd, sessions)`), the season CSV cache (`collect_season`, parameterized by filename/columns/result column/loader), the model factory (`make_model(categorical_features)`), `rank_corr`, and permutation importance (`importance_scores` returns a DataFrame, `importance_report` prints it).
 - Two **independent pipeline entry points** — `predict_race.py` (gain = finish − grid vs direct = absolute finish; baseline = grid order) and `predict_grid.py` (anchor = change vs last quali vs direct; baseline = last-quali persistence; day-before-quali constraint: only FP1/FP2 + sprint qualifying, never FP3 or the sprint race). Each owns its FEATURES/targets/feature engineering (`build_features`), sprint handling and round loaders.
 - Each pipeline exposes structured results alongside the printed reports, for the web app:
-  - `backtest_records(features, min_train_rounds)` → list of per-round metric dicts; `backtest_report(records)` prints it. CLI output text is unchanged by this split. Records also carry web-app-only fields the CLI never prints: `gain_points`/`direct_points` (race podium scoring: +15 exact position, +5 wrong slot, +100 perfect podium) or `anchor_points`/`direct_points` (grid pole scoring: +15 correct pole), plus `*_top1` and `actual_top1` winner/pole driver names.
-  - `final_predictions(features, target)` → `{"gain"/"anchor", "direct", "*_model", "train"}`; `final_report(...)` prints it. The main frame carries a `direct_pos` column for side-by-side display.
+  - `backtest_records(features, min_train_rounds)` → list of per-round metric dicts; `backtest_report(records)` prints it. CLI output text is unchanged by this split. Records also carry web-app-only fields the CLI never prints: `gain_points`/`direct_points` (race podium scoring: +15 exact position, +5 wrong slot, +100 perfect podium) or `anchor_points`/`direct_points` (grid pole scoring: +15 correct pole), `*_top1` and `actual_top1` winner/pole driver names, and `*_train_rounds` (rounds each model trained on — a value <2 means the model degenerates to the baseline order, see below).
+  - `final_predictions(features, target)` → `{"gain"/"anchor", "direct", "*_model", "train", "*_features"}`; `final_report(...)` prints it. The main frame carries a `direct_pos` column for side-by-side display. The `*_features` lists are the features each model actually used (all-NaN training columns dropped, see below).
   - `importance_frame(pred, mode)` → permutation-importance DataFrame for one final model.
-- **Streamlit app** (`app.py`, `st.navigation`): `webapp/page_home.py`, `webapp/page_race.py`, `webapp/page_quali.py` are the pages (`st.Page` and `st.page_link` paths resolve relative to `app.py`, i.e. the repo root); `webapp/webapp_common.py` is app-only glue (no pipeline logic): `capture_stdout`, `st.cache_resource` wrappers keyed on `(kind, year, data_version, force_refresh, target, mode, ...)` — the sidebar's **Reload season data** bumps `data_version`, the refresh checkbox maps to CLI `--refresh`. Never create Streamlit elements inside `@st.cache_resource` functions (CacheReplayClosureError) — cached functions return their logs, pages display them afterwards. `webapp_common.page_link` wraps `st.page_link` so pages also run standalone (AppTest) where no navigation context exists.
+- sklearn's `HistGradientBoosting` **cannot fit a feature column that is entirely NaN** — it raises `ValueError: window shape cannot be larger than input array shape` (still true in sklearn 1.9.x; round-1 rows have all-NaN form features, sprint columns are all-NaN before the first sprint weekend). Each pipeline's `train_model` therefore drops those columns via `usable_features(train)`, `make_model(feature_names)` computes the `team_id` categorical index within the reduced list, and `predict_round`/importance reuse the returned feature list. Rounds with a full training set are unaffected, so default CLI output is unchanged; this is what makes the race backtest able to predict round 2 (trained on round 1 only).
+- A model trained on a **single round (~22 rows) cannot make any tree split** (`min_samples_leaf=20` needs ≥40 rows in a parent), so it predicts a constant and its "prediction" collapses to the baseline order (grid order for race — a constant gain added to grid; last-quali order for the grid pipeline — a constant added to the anchor, plus `rank(method="first")` tie-breaking by the grid/driver pre-sort). This affects race round 2 and quali round 3; their backtest rows/metrics are baseline performance, not model skill. The web app flags this via `degenerate_backtest_note` / `degenerate_training_note` (webapp_common), gated on the `*_train_rounds` record fields and the bundle's `train_rounds`.
+- **Streamlit app** (`app.py`, `st.navigation`): `webapp/page_home.py`, `webapp/page_race.py`, `webapp/page_quali.py` are the pages (`st.Page` and `st.page_link` paths resolve relative to `app.py`, i.e. the repo root); `webapp/webapp_common.py` is app-only glue (no pipeline logic): `capture_stdout` (optionally streams printed output live into an `st.empty` log element), `run_pipeline` (data load → target resolution → features → backtest → final models → importance, returns a render bundle or `{"error": ...}`), and small UI/table/chart helpers. `webapp_common.page_link` wraps `st.page_link` so pages also run standalone (AppTest) where no navigation context exists.
+- Web app execution model — **button-gated**:
+  - Changing a widget never starts the pipeline. The sidebar **Run prediction** button executes `run_pipeline` once and stores the bundle in `st.session_state[f"{kind}_result"]` (plus a settings snapshot used for the "settings changed since the last run" warning); every rerun afterwards just renders from the bundle.
+  - **Reload season data** bumps `st.session_state[f"{kind}_data_version"]` and refreshes the data layer only (with live progress in a log element). The **Force full re-download** checkbox maps to CLI `--refresh` but takes effect only on the next Reload/Run press — checking it alone downloads nothing.
+  - Only `get_schedule` and `team_colors` are `@st.cache_resource`-cached (tiny, element-free) — never create Streamlit elements inside cached functions (CacheReplayClosureError); the uncached collect path is exactly what allows the live download log. `collect_season` prints `fetching round N  <event> ...` before each round download so users can track slow progress.
 - Web app presentation details:
-  - Tables keep **numeric underlying values** and display `P{n}` via pandas Styler formats, so interactive column sorting is numeric (not the "P1, P10, P11" string sort). Cell colors are Styler CSS: gold/silver/bronze for P1/P2/P3 cells (`position_css`), team-colored Driver/Team text (`team_colors(year)` reads the latest completed round's `TeamColor` from fastf1, like the notebooks; `readable_color` darkens light colors).
+  - Tables keep **numeric underlying values** and display `P{n}` via pandas Styler formats, so interactive column sorting is numeric (not the "P1, P10, P11" string sort). Cell colors are Styler CSS: gold/silver/bronze for P1/P2/P3 cells (`position_css`), green for exact predictions (`zero_error_css` on the error columns in review mode), team-colored Driver/Team text (`team_colors(year)` reads the latest completed round's `TeamColor` from fastf1, like the notebooks; `readable_color` darkens light colors).
   - In review (post) mode the prediction table is sorted by the actual result; in prediction (pre) mode by the gain/anchor prediction.
-  - The sidebar "First backtest round" selectbox maps to `min_train_rounds` = count of completed rounds before the selection (`first_backtest_control`).
-  - Charts are Streamlit-native (no matplotlib): error-by-round and rank-correlation are `st.bar_chart` grouped series; the "final predicted grids" lane diagram (`predicted_order_chart` in webapp_common) is an Altair layered chart rendered via `st.altair_chart(..., theme="streamlit")` — the same engine/theme as native charts, used because text marks and dashed cut rules aren't expressible with the `st.*_chart` shortcuts. Pages also show podium/pole points and predicted winner/pole tables.
+  - The sidebar "First backtest round" selectbox maps to `min_train_rounds` (completed rounds are calendar-based, no data load needed). Its default, **Auto (recommended)**, passes the pipeline default `MIN_TRAIN_ROUNDS` (5); an explicit round maps to the count of completed rounds before it. Earliest explicit round: 2 for race (round 1 can never be predicted — no training data before it), 3 for qualifying (the anchor model additionally needs each driver's previous quali result).
+  - Charts are Streamlit-native (no matplotlib): the prediction-error-by-round chart is a `st.bar_chart(..., stack=False)` grouped series; the "final predicted grids" lane diagram (`predicted_order_chart` in webapp_common) is an Altair layered chart rendered via `st.altair_chart(..., theme="streamlit")` — the same engine/theme as native charts, used because text marks and dashed cut rules aren't expressible with the `st.*_chart` shortcuts. Lane order (bottom → top): gain/anchor model, direct model, actual result / starting (or last-quali) grid — keep the page captions in sync. Cut lines: race podium/points (3.5 / 10.5); quali Q3/Q2 (10.5 / 16.5 — with the 22-car grid, P16 reaches Q2). Pages also show podium/pole points and predicted winner/pole tables, each with bold **Season total** and **Average per round** summary rows.
 - `notebooks/*.ipynb` inline copies of the pipeline logic (pre-`f1_common` layout, logic-equivalent). Their first cell resolves the repo root (`Path.cwd().parent` when executed from `notebooks/`) so they share the root `cache/` and `data/`. **Editing a pipeline `.py` does not update the notebooks — keep both in sync manually**, cell by cell.
 
 ## fastf1 gotchas
@@ -76,15 +82,25 @@ Shared CLI flags: `--season YEAR`, `--predict-round N`, `--next` (next race/qual
 ```bash
 $PY - <<'EOF'
 from streamlit.testing.v1 import AppTest
-for page in ("webapp/page_home.py", "webapp/page_race.py", "webapp/page_quali.py"):
+for page, run_key in (("webapp/page_home.py", None),
+                      ("webapp/page_race.py", "race_run"),
+                      ("webapp/page_quali.py", "grid_run")):
     at = AppTest.from_file(page, default_timeout=900)
     at.run()
     assert not at.exception and not at.error, page
+    if run_key:  # prediction pages only render after the Run button is pressed
+        at.sidebar.button(key=run_key).click()
+        at.run()
+        assert not at.exception and not at.error, page
     print(page, "OK")
 EOF
 ```
 
-Prediction pages re-run the full backtest + importance on first execution (~1-3 min with cached data). A real browser check is `$PY -m streamlit run app.py --server.headless true` and `curl localhost:8501/healthz`.
+- Prediction pages execute the full backtest + importance when **Run prediction** is pressed (~1-3 min with cached data). A real browser check is `$PY -m streamlit run app.py --server.headless true` and `curl localhost:8501/healthz`.
+- AppTest gotchas (learned the hard way):
+  - Press sidebar buttons via `at.sidebar.button(key="race_run").click()` then `at.run()` — elements render in the same run.
+  - `selectbox.value` is the raw widget value and `set_value` must be given that same raw value: for the first-backtest selectbox (label-based options) that's the label string; anywhere a `format_func` was used, it's the underlying int. Passing the wrong one raises a confusing `ValueError: list.index(x)`.
+  - Chart elements (`st.bar_chart`/`st.altair_chart`) are not exposed on the AppTest element tree — verify charts via absence of exceptions plus the markdown titles around them, not by inspecting chart data.
 
 ## Notebook verification
 
@@ -96,5 +112,5 @@ Takes ~5-10 min (re-runs backtest + charts). The notebooks must finish with no c
 
 ## Repo
 
-- Remote: `https://github.com/scgon/Formula1RaceAndGridPredictor.git`, branch `main`. Push with the full remote URL flow (`gh` / git credentials are configured).
+- Remote: `https://github.com/scgon/Formula1RaceAndGridPredictor.git`, branch `main`; `git push origin main` works (credentials configured).
 - `pipelines/predict_race.py --help` is the cheap import/argparse smoke test (~2s) when you only need to confirm the code loads.
