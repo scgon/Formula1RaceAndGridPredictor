@@ -26,6 +26,7 @@ from types import SimpleNamespace
 import altair as alt
 import pandas as pd
 import streamlit as st
+from fastf1.exceptions import RateLimitExceededError
 
 _HERE = Path(__file__).resolve().parent
 for _p in (_HERE, _HERE.parent / "pipelines"):
@@ -146,6 +147,25 @@ def completed_round_numbers(schedule):
     return [rn for rn, _name in f1_common.completed_rounds(schedule)]
 
 
+def bundled_years():
+    """Years whose season CSVs are bundled in the repo (both pipelines present).
+
+    Selecting a bundled year never triggers a bulk season download — only
+    rounds completed since the CSV snapshot (plus the upcoming round's
+    sessions) are fetched, which keeps the app far below the F1 API's hard
+    limit of 500 uncached calls per hour.
+    """
+    years = set()
+    for path in f1_common.DATA_DIR.glob("season_*.csv"):
+        try:
+            year = int(path.stem.split("_")[1])
+        except (IndexError, ValueError):
+            continue
+        if (f1_common.DATA_DIR / f"quali_season_{year}.csv").exists():
+            years.add(year)
+    return sorted(years)
+
+
 # ---------------------------------------------------------------------------
 # data + pipeline execution (uncached — runs only on button press)
 # ---------------------------------------------------------------------------
@@ -261,6 +281,10 @@ def run_pipeline(kind, year, data_version, force_refresh, selection, min_train,
         }
     except TargetUnavailable as exc:
         return {"error": str(exc)}
+    except RateLimitExceededError:
+        return {"error": "The F1 data API rate limit was hit (500 calls per hour) — "
+                         "this clears within the hour. Rounds fetched so far are saved; "
+                         "press Run prediction again later."}
     except Exception as exc:  # download failures etc.
         return {"error": f"Pipeline failed: {type(exc).__name__}: {exc}"}
     finally:
@@ -274,13 +298,28 @@ def run_pipeline(kind, year, data_version, force_refresh, selection, min_train,
 def season_inputs(kind):
     """Sidebar season + data controls. Returns (year, force_refresh, reload_pressed).
 
+    Only seasons with bundled CSVs are selectable, so public visitors can't
+    trigger a full-season download (~450 API calls) by browsing years — the
+    scheduled data-refresh workflow keeps the bundle current. The year after
+    the latest bundled one is offered for next-season previews (the app then
+    trains on the previous season's data, as the CLI fallback does).
     Nothing here executes the pipeline: the force checkbox only takes effect
     on the next Reload/Run press, and Reload refreshes the data layer only.
     """
-    year = st.number_input(
-        "Season", min_value=2018, max_value=CURRENT_YEAR + 1, value=CURRENT_YEAR,
-        help="First use of a different season downloads its full history (~several minutes).",
-        key=f"{kind}_season",
+    available = bundled_years()
+    if available:
+        options = sorted(set(available) | {max(available) + 1})
+        default = CURRENT_YEAR if CURRENT_YEAR in options else max(options)
+        help_text = ("Seasons with bundled historical data (kept current by a scheduled "
+                     "job). The year after the last bundled season predicts upcoming "
+                     "races using the previous season's training data.")
+    else:
+        options = [CURRENT_YEAR]
+        default = CURRENT_YEAR
+        help_text = "First use of a season downloads its full history (~several minutes)."
+    year = st.selectbox(
+        "Season", options, index=options.index(default), key=f"{kind}_season",
+        help=help_text,
     )
     force_refresh = st.checkbox(
         "Force full re-download (`--refresh`)",

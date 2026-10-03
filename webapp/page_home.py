@@ -119,7 +119,8 @@ for kind, pattern, target in (("Race", "season_*.csv", "finish"), ("Qualifying",
             continue
 if rows:
     st.table(pd.DataFrame(rows))
-    st.caption("Data and fastf1 caches live in `data/` and `cache/` (gitignored). "
+    st.caption("Season CSVs are bundled with the app and kept current by a scheduled job; "
+               "the fastf1 session cache lives in `cache/` (not tracked). "
                "Each prediction page has a *Reload season data* button to pick up newly completed rounds.")
 else:
     st.warning("No season data cached yet — run either prediction page once to download it.")

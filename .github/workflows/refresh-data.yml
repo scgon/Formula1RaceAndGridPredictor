@@ -1,0 +1,69 @@
+name: Refresh bundled season data
+
+# Keeps data/*.csv (the bundled season CSVs the web app and CLIs reuse)
+# current. This is what protects the hosted app from the F1 API rate limit
+# (500 uncached calls/hour): a fresh container finds bundled data and only
+# ever downloads newly completed rounds. Pushes that touch pipeline code are
+# covered too, so a CSV schema change regenerates the bundle immediately.
+
+on:
+  schedule:
+    - cron: "17 */6 * * *" # every 6 hours (UTC; GitHub may delay peak-time crons)
+  push:
+    branches: [main]
+    paths: ['pipelines/**', 'scripts/**', 'webapp/**', 'requirements.txt']
+  workflow_dispatch:
+    inputs:
+      years:
+        description: "Seasons to collect, space-separated (e.g. '2018 2019')"
+        required: false
+        default: ""
+      wait-on-limit:
+        description: "Sleep and retry when the F1 API rate limit is hit"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Restore fastf1 cache
+        uses: actions/cache@v4
+        with:
+          path: cache
+          key: fastf1-${{ github.run_id }}
+          restore-keys: fastf1-
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Collect season data
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.years }}" ]; then
+            ARGS="$ARGS --years ${{ github.event.inputs.years }}"
+          fi
+          if [ "${{ github.event.inputs.wait-on-limit }}" = "true" ]; then
+            ARGS="$ARGS --wait-on-limit"
+          fi
+          python scripts/refresh_data.py $ARGS
+      # Commit even when collection exits non-zero (some rounds missing):
+      # fetched rounds are valuable progress and resume on the next run.
+      - name: Commit updated CSVs
+        if: always()
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Refresh bundled season data [skip ci]"
+          file_pattern: data/*.csv

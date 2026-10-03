@@ -21,7 +21,9 @@
 │   ├── page_quali.py
 │   └── webapp_common.py     # app-only glue (run_pipeline, stdout capture, table/chart helpers)
 ├── notebooks/               # inline copies of the pipelines (manual sync)
-├── data/  cache/            # season CSVs and fastf1 cache (repo root, gitignored)
+├── scripts/refresh_data.py  # regenerates the bundled season CSVs (used by the workflow)
+├── .github/workflows/refresh-data.yml  # scheduled job keeping data/*.csv current
+├── data/  cache/            # season CSVs (tracked; kept current by the workflow) + fastf1 cache (gitignored)
 ├── requirements.txt  README.md  LICENSE
 ```
 
@@ -35,17 +37,19 @@ PY=/opt/homebrew/Caskroom/miniconda/base/bin/python
 $PY -u pipelines/predict_race.py   # race prediction (gain + direct models, rolling backtest)
 $PY -u pipelines/predict_grid.py   # qualifying/grid prediction (anchor + direct models)
 $PY -m streamlit run app.py        # web app (homepage + one page per pipeline)
+$PY scripts/refresh_data.py        # refresh the bundled season CSVs (default: previous + current season)
+                                    # bulk-generate seasons: --years 2018 2019 ... --wait-on-limit
 ```
 
 Shared CLI flags: `--season YEAR`, `--predict-round N`, `--next` (next race/quali on the calendar), `--refresh` (re-download season data), `--min-train-rounds N`, `--model {fast,optimized}` (model profile, see below).
 
-- **First run downloads ~45 fastf1 sessions (several minutes)**. After that `cache/` and `data/*.csv` make runs take ~3-4 min. A round that fails mid-download is skipped and retried on the next run.
+- **A bundled season's first run downloads nothing but newly completed rounds** (the season CSVs are tracked in the repo); an unbundled season's first run downloads ~45 fastf1 sessions (several minutes). After that `cache/` and `data/*.csv` make runs take ~3-4 min. A round that fails mid-download is skipped and retried on the next run.
 - Always run with `-u`; do not pipe output through `head` — block buffering makes long jobs look stalled.
 - Under system load (e.g. a PyCharm Jupyter kernel is running), cap threads: `OMP_NUM_THREADS=4`.
 
 ## Architecture
 
-- `pipelines/f1_common.py` — shared machinery for both pipelines and the web app: fastf1 cache setup, UTC/session-time helpers (`utc_now`, `session_utc`, `completed_rounds`), quali-lap extraction (`best_quali_seconds`, `pole_seconds`), practice-lap features (`practice_features(year, rnd, sessions)`), the season CSV cache (`collect_season`, parameterized by filename/columns/result column/loader), the model factory, `rank_corr`, and permutation importance (`importance_scores` returns a DataFrame, `importance_report` prints it).
+- `pipelines/f1_common.py` — shared machinery for both pipelines and the web app: fastf1 cache setup, UTC/session-time helpers (`utc_now`, `session_utc`, `completed_rounds`), quali-lap extraction (`best_quali_seconds`, `pole_seconds`), practice-lap features (`practice_features(year, rnd, sessions)`), the season CSV cache (`collect_season`, parameterized by filename/columns/result column/loader, with a soft stop on the F1 API rate limit and an optional `rate_limit_wait` sleep-and-retry), the model factory, `rank_corr`, and permutation importance (`importance_scores` returns a DataFrame, `importance_report` prints it).
 - **Model profiles** — the CLI `--model {fast,optimized}` flag and the web-app *Model profile* selectbox select between: `fast` (default) — `HistGradientBoostingRegressor` with the fixed `FAST_PARAMS`; `optimized` — before every fit, `f1_common.tune_hyperparameters` runs a seeded randomized search over `TUNED_SEARCH_SPACE`, scoring candidates by pooled MAE over rolling CV folds (each fold = one training round predicted by the rounds before it; `TUNE_MAX_SPLITS` recent rounds, `None` + `TUNE_STRIDE` = strided leave-one-round-out). `FAST_PARAMS` is always the first candidate, ties keep it, and a candidate must beat it by `TUNE_MIN_IMPROVEMENT` (relative MAE) or the tuner returns `None` and the fit falls back to the fast values (this also covers <2-round training sets, so degenerate single-round models behave identically under both profiles and the web-app degenerate notes stay accurate). Tuning inside the backtest only ever sees rounds before the predicted round, so optimized backtest metrics stay honest. A fold's training share can be all-NaN in a column (round 1 has no form/sprint data) — the tuner zeroes those columns for that fold (a constant column can't be split on); without that, HistGB raises and the backtest silently skips the round. `train_model` returns the tuned dict; `final_predictions` bundles it as `gain_params`/`anchor_params`/`direct_params` for the CLI/web-app "Tuned hyperparameters" display.
 - Two **independent pipeline entry points** — `predict_race.py` (gain = finish − grid vs direct = absolute finish; baseline = grid order) and `predict_grid.py` (anchor = change vs last quali vs direct; baseline = last-quali persistence; day-before-quali constraint: only FP1/FP2 + sprint qualifying, never FP3 or the sprint race). Each owns its FEATURES/targets/feature engineering (`build_features`), sprint handling and round loaders.
 - Each pipeline exposes structured results alongside the printed reports, for the web app:
@@ -72,6 +76,7 @@ Shared CLI flags: `--season YEAR`, `--predict-round N`, `--next` (next race/qual
 - Schedule `Session*DateUtc` values are **tz-naive** despite the name.
 - Race results `Position` includes retirees (timing position); DNS rows are NaN. 2026 status values are `Finished`/`Lapped`/`Retired`/`Did not start` — not the old `+1 Lap` format.
 - A round only counts as "completed" **3 hours after its race start** (`COMPLETION_BUFFER`), so a run during a live race never caches partial results.
+- **fastf1 hard-stops at 500 uncached API calls/hour** (`RateLimitExceededError` raised by its own request limiter; cache-served requests are free, and the pace is capped at 4 calls/s anyway — so the *count* of distinct downloads matters, never the speed). This is why `data/*.csv` are tracked and kept current by the scheduled `refresh-data` workflow (`scripts/refresh_data.py`, every 6h + on pipeline-code pushes): the app is hosted on Streamlit Community Cloud, whose containers hibernate after 12h without traffic and lose all non-repo disk on restart — without bundled CSVs every cold start bulk-downloads whole seasons and slams into the limit. `collect_season` treats the limit as a soft stop (fetched rounds are saved; the rest resume on the next run) and takes an optional `rate_limit_wait` (used by the refresh script's `--wait-on-limit`) to sleep and retry instead. The web-app Season selectbox only offers bundled years (plus the year after the last bundled one as a next-season preview) so visitors can't trigger bulk downloads; the CLI `--season` flag stays unrestricted.
 
 ## Determinism
 

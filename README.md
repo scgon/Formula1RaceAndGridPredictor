@@ -21,7 +21,11 @@ Two independent ML pipelines for predicting F1 race results and qualifying grids
 ├── notebooks/               # interactive inline copies of the pipelines
 │   ├── race_predictions.ipynb
 │   └── grid_predictions.ipynb
-├── data/                    # per-season CSV caches (auto-created, gitignored)
+├── scripts/
+│   └── refresh_data.py      # regenerates the bundled season CSVs (used by the scheduled workflow)
+├── .github/workflows/
+│   └── refresh-data.yml     # scheduled job keeping data/*.csv current
+├── data/                    # per-season CSV caches (bundled in the repo, refreshed by the workflow)
 ├── cache/                   # fastf1 HTTP/session cache (auto-created, gitignored)
 ├── requirements.txt  AGENTS.md  LICENSE
 ```
@@ -111,7 +115,7 @@ python -u pipelines/predict_race.py --next --model optimized
 python -u pipelines/predict_race.py --refresh
 ```
 
-**First run** downloads ~45 fastf1 sessions (~several minutes). Subsequent runs use `cache/` and `data/*.csv` (~3–4 min).
+Season CSVs are bundled in `data/`, so runs normally only download rounds completed since the last scheduled refresh. An unbundled season's first run still downloads ~45 fastf1 sessions (~several minutes); subsequent runs use `cache/` and `data/*.csv` (~3–4 min).
 
 Run with `-u` (unbuffered output) and don't pipe long runs through `head` — block buffering makes them look stalled.
 
@@ -157,6 +161,7 @@ python -m nbconvert --to notebook --execute --inplace notebooks/grid_predictions
 - Model profiles: `fast` fits the fixed hyperparameters; `optimized` runs a seeded randomized search per model (pooled-MAE scoring over rolling CV folds, the fast values always a candidate, adopted only when they are clearly beaten)
 - Deterministic: fixed `random_state=42`, stable data ordering → identical metrics on identical input under both profiles (the search sampling is seeded too)
 - Caches (`cache/`, `data/`) live at the repo root and are shared by pipelines, web app and notebooks; `--refresh` or schema changes trigger full re-download
+- The season CSVs (`data/*.csv`) are tracked in the repo and kept current by a scheduled GitHub workflow (`.github/workflows/refresh-data.yml`, running `scripts/refresh_data.py`): fastf1 hard-stops at 500 uncached API calls/hour, and a cold Streamlit Cloud container (disk resets on every restart) would otherwise bulk-download whole seasons on the first run and hit that limit
 - Race completion buffer: 3 hours after race start (prevents caching partial results during live races)
 - Grid pipeline day-before-quali constraint: only FP1/FP2 + sprint quali features allowed
 
@@ -166,6 +171,7 @@ python -m nbconvert --to notebook --execute --inplace notebooks/grid_predictions
 |-------|-----|
 | `ModuleNotFoundError: fastf1` | The interpreter you're using doesn't have the dependencies — activate the environment from [Setup](#setup), or run `python -m pip install -r requirements.txt` inside it |
 | Slow first run | Expected — downloads ~45 sessions; subsequent runs are fast |
+| `RateLimitExceededError: 500 calls/h` | The F1 data API's hourly limit was hit — fetched rounds are cached, so simply re-run later; collection resumes from where it stopped (the refresh script's `--wait-on-limit` does this automatically) |
 | "qualifying has not happened yet" | Run after FP2 for grid, after quali for race; or use `--predict-round` on a past round |
 | Metrics shift after code change | Expected — deterministic models mean metric changes = code changes, not noise |
 

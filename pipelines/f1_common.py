@@ -8,6 +8,7 @@ The Streamlit app (app.py) builds on the same functions.
 """
 
 import warnings
+import time
 from datetime import datetime, timedelta, timezone
 from itertools import product
 from pathlib import Path
@@ -15,6 +16,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import fastf1
+from fastf1.exceptions import RateLimitExceededError
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.inspection import permutation_importance
 
@@ -30,6 +32,15 @@ MIN_TRAIN_ROUNDS = 5
 STINT_WINDOW = 5
 STINT_MIN_LAPS = 3
 COMPLETION_BUFFER = timedelta(hours=3)
+
+# fastf1 hard-stops at 500 uncached API requests per hour (500 calls/hour
+# against Ergast/Jolpica). collect_season treats that limit as a soft stop:
+# with rate_limit_wait=None it saves what it fetched and leaves the rest for
+# the next run; with a wait interval it sleeps and retries instead. The wait
+# cap bounds the patience of a single call (8 * 10 min ≈ one full rate-limit
+# window) before it falls back to the save-and-stop behavior.
+RATE_LIMIT_WAIT_SECS = 600
+RATE_LIMIT_MAX_WAITS = 8
 
 # --- model profiles ---------------------------------------------------------
 
@@ -183,13 +194,17 @@ def practice_features(year, round_number, sessions):
 
 
 def collect_season(year, schedule, *, filename, required_columns, result_column,
-                   load_round, refresh=False):
+                   load_round, refresh=False, rate_limit_wait=None):
     """Fetch completed rounds into the season CSV, reusing whatever is cached.
 
     filename         CSV name pattern, e.g. "season_{year}.csv"
     required_columns columns the cached CSV must contain to be reused
     result_column    column holding classified results ("finish" / "quali_pos")
     load_round       callable (year, round_number, event_name) -> DataFrame
+    rate_limit_wait  seconds to sleep before retrying a round when the F1 API
+                     rate limit (500 uncached calls/hour) is hit; None stops
+                     after the limit instead, leaving the remaining rounds
+                     for the next run (already fetched rounds stay in the CSV)
     """
     path = DATA_DIR / filename.format(year=year)
     completed = completed_rounds(schedule)
@@ -207,18 +222,39 @@ def collect_season(year, schedule, *, filename, required_columns, result_column,
     print(f"Season {year}: {len(completed)} completed rounds ({len(have)} cached, {len(todo)} to fetch)")
 
     frames = []
+    rate_limited = False
+    waits_left = RATE_LIMIT_MAX_WAITS
     for rn, name in todo:
-        print(f"  fetching round {rn:>2}  {name} ...")
-        try:
-            frame = load_round(year, rn, name)
-        except Exception as exc:
-            print(f"  round {rn:>2} ({name}) skipped: {type(exc).__name__}: {exc}")
+        while True:
+            print(f"  fetching round {rn:>2}  {name} ...")
+            try:
+                frame = load_round(year, rn, name)
+                break
+            except RateLimitExceededError:
+                if rate_limit_wait is None or waits_left <= 0:
+                    print(f"  round {rn:>2} ({name}) skipped: F1 API rate limit "
+                          "reached (500 calls/hour)")
+                    rate_limited = True
+                    break
+                waits_left -= 1
+                print(f"  API rate limit reached (500 calls/hour) — waiting "
+                      f"{rate_limit_wait // 60} min, then retrying round {rn:>2} ...")
+                time.sleep(rate_limit_wait)
+            except Exception as exc:
+                print(f"  round {rn:>2} ({name}) skipped: {type(exc).__name__}: {exc}")
+                frame = None
+                break
+        if rate_limited:
+            break
+        if frame is None:
             continue
         if frame[result_column].notna().sum() == 0:
             print(f"  round {rn:>2} ({name}) skipped: no classified results yet")
             continue
         print(f"  fetched round {rn:>2}  {name}")
         frames.append(frame)
+    if rate_limited:
+        print("  Rounds fetched so far are saved; the rest will download on the next run.")
 
     if cached is not None:
         frames.insert(0, cached)

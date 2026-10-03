@@ -178,7 +178,7 @@ def load_upcoming_round(year, round_number, event_name, fallback):
     return _merge_weekend_features(frame, year, round_number)
 
 
-def collect_season(year, schedule, refresh=False):
+def collect_season(year, schedule, refresh=False, rate_limit_wait=None):
     return common.collect_season(
         year, schedule,
         filename="quali_season_{year}.csv",
@@ -186,6 +186,7 @@ def collect_season(year, schedule, refresh=False):
         result_column="quali_pos",
         load_round=load_completed_round,
         refresh=refresh,
+        rate_limit_wait=rate_limit_wait,
     )
 
 
