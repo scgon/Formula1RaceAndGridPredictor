@@ -30,7 +30,7 @@ Two independent ML pipelines for predicting F1 race results and qualifying grids
 
 ## Setup
 
-Requires Python 3.10+ (tested on 3.14). Any environment with the dependencies installed works — the maintainer uses Homebrew miniconda on macOS, but a plain `venv` (or conda, or any other manager) is fine:
+Requires Python 3.10+ (tested on 3.14). Any environment with the dependencies installed works — I use Homebrew miniconda on macOS, but a plain `venv` (or conda, or any other manager) is fine:
 
 ```bash
 git clone https://github.com/scgon/Formula1RaceAndGridPredictor.git
