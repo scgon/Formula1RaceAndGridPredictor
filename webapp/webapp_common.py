@@ -301,8 +301,9 @@ def season_inputs(kind):
     Only seasons with bundled CSVs are selectable, so public visitors can't
     trigger a full-season download (~450 API calls) by browsing years — the
     scheduled data-refresh workflow keeps the bundle current. The year after
-    the latest bundled one is offered for next-season previews (the app then
-    trains on the previous season's data, as the CLI fallback does).
+    the latest bundled one is offered as a preview: once its first round
+    completes it behaves like any bundled season; before that the app falls
+    back to the previous season's data (the same fallback the CLI uses).
     Nothing here executes the pipeline: the force checkbox only takes effect
     on the next Reload/Run press, and Reload refreshes the data layer only.
     """
@@ -310,9 +311,10 @@ def season_inputs(kind):
     if available:
         options = sorted(set(available) | {max(available) + 1})
         default = CURRENT_YEAR if CURRENT_YEAR in options else max(options)
-        help_text = ("Seasons with bundled historical data (kept current by a scheduled "
-                     "job). The year after the last bundled season predicts upcoming "
-                     "races using the previous season's training data.")
+        help_text = ("Seasons with bundled historical data, kept current by a scheduled "
+                     "job. The year after the last bundled season becomes fully usable "
+                     "as its rounds complete; until then the app falls back to the "
+                     "previous season.")
     else:
         options = [CURRENT_YEAR]
         default = CURRENT_YEAR
