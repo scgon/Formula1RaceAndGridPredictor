@@ -1,0 +1,261 @@
+round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_race_pace_delta,fp_best_delta,fp_laps,sprint_quali_pos,sprint_finish,sprint_gain,quali_delta
+1,Australian Grand Prix,10,GAS,Red Bull,17.0,83.02,11.0,0.0,+1 Lap,,,,,,,2.533999999999992
+1,Australian Grand Prix,11,PER,Racing Point,10.0,82.532,13.0,0.0,+1 Lap,,,,,,,2.0459999999999923
+1,Australian Grand Prix,16,LEC,Ferrari,5.0,81.442,5.0,10.0,Finished,,,,,,,0.9559999999999889
+1,Australian Grand Prix,18,STR,Racing Point,16.0,83.017,9.0,2.0,+1 Lap,,,,,,,2.5309999999999917
+1,Australian Grand Prix,20,MAG,Haas F1 Team,7.0,82.099,6.0,8.0,Finished,,,,,,,1.6129999999999995
+1,Australian Grand Prix,23,ALB,Toro Rosso,13.0,82.636,14.0,0.0,+1 Lap,,,,,,,2.1499999999999915
+1,Australian Grand Prix,26,KVY,Toro Rosso,15.0,82.511,10.0,1.0,+1 Lap,,,,,,,2.0249999999999915
+1,Australian Grand Prix,27,HUL,Renault,11.0,82.54,7.0,6.0,+1 Lap,,,,,,,2.054000000000002
+1,Australian Grand Prix,3,RIC,Renault,12.0,82.57,19.0,0.0,Damage,,,,,,,2.083999999999989
+1,Australian Grand Prix,33,VER,Red Bull,4.0,81.32,3.0,15.0,Finished,,,,,,,0.833999999999989
+1,Australian Grand Prix,4,NOR,McLaren,8.0,82.304,12.0,0.0,+1 Lap,,,,,,,1.8179999999999978
+1,Australian Grand Prix,44,HAM,Mercedes,1.0,80.486,2.0,18.0,Finished,,,,,,,0.0
+1,Australian Grand Prix,5,VET,Ferrari,3.0,81.19,4.0,12.0,Finished,,,,,,,0.7039999999999935
+1,Australian Grand Prix,55,SAI,McLaren,18.0,83.084,20.0,0.0,Engine,,,,,,,2.597999999999999
+1,Australian Grand Prix,63,RUS,Williams,19.0,84.36,16.0,0.0,+2 Laps,,,,,,,3.8739999999999952
+1,Australian Grand Prix,7,RAI,Alfa Romeo,9.0,82.314,8.0,4.0,+1 Lap,,,,,,,1.8279999999999887
+1,Australian Grand Prix,77,BOT,Mercedes,2.0,80.598,1.0,26.0,Finished,,,,,,,0.11199999999999477
+1,Australian Grand Prix,8,GRO,Haas F1 Team,6.0,81.826,18.0,0.0,Wheel,,,,,,,1.3399999999999892
+1,Australian Grand Prix,88,KUB,Williams,20.0,86.067,17.0,0.0,+3 Laps,,,,,,,5.580999999999989
+1,Australian Grand Prix,99,GIO,Alfa Romeo,14.0,82.431,15.0,0.0,+1 Lap,,,,,,,1.9449999999999932
+2,Bahrain Grand Prix,10,GAS,Red Bull,13.0,89.526,8.0,4.0,Finished,,,,,,,1.6599999999999966
+2,Bahrain Grand Prix,11,PER,Racing Point,14.0,89.756,10.0,1.0,Finished,,,,,,,1.8900000000000006
+2,Bahrain Grand Prix,16,LEC,Ferrari,1.0,87.866,3.0,16.0,Finished,,,,,,,0.0
+2,Bahrain Grand Prix,18,STR,Racing Point,18.0,90.217,14.0,0.0,+1 Lap,,,,,,,2.350999999999999
+2,Bahrain Grand Prix,20,MAG,Haas F1 Team,6.0,88.757,13.0,0.0,+1 Lap,,,,,,,0.8910000000000053
+2,Bahrain Grand Prix,23,ALB,Toro Rosso,12.0,89.513,9.0,2.0,Finished,,,,,,,1.6470000000000056
+2,Bahrain Grand Prix,26,KVY,Toro Rosso,15.0,89.854,12.0,0.0,+1 Lap,,,,,,,1.9879999999999995
+2,Bahrain Grand Prix,27,HUL,Renault,17.0,90.034,17.0,0.0,Engine,,,,,,,2.1680000000000064
+2,Bahrain Grand Prix,3,RIC,Renault,10.0,89.488,18.0,0.0,Out of fuel,,,,,,,1.6219999999999999
+2,Bahrain Grand Prix,33,VER,Red Bull,5.0,88.752,4.0,12.0,Finished,,,,,,,0.8859999999999957
+2,Bahrain Grand Prix,4,NOR,McLaren,9.0,89.043,6.0,8.0,Finished,,,,,,,1.1770000000000067
+2,Bahrain Grand Prix,44,HAM,Mercedes,3.0,88.19,1.0,25.0,Finished,,,,,,,0.32399999999999807
+2,Bahrain Grand Prix,5,VET,Ferrari,2.0,88.16,5.0,10.0,Finished,,,,,,,0.29399999999999693
+2,Bahrain Grand Prix,55,SAI,McLaren,7.0,88.813,19.0,0.0,Collision damage,,,,,,,0.9470000000000027
+2,Bahrain Grand Prix,63,RUS,Williams,19.0,91.759,15.0,0.0,+1 Lap,,,,,,,3.8930000000000007
+2,Bahrain Grand Prix,7,RAI,Alfa Romeo,8.0,89.022,7.0,6.0,Finished,,,,,,,1.156000000000006
+2,Bahrain Grand Prix,77,BOT,Mercedes,4.0,88.256,2.0,18.0,Finished,,,,,,,0.39000000000000057
+2,Bahrain Grand Prix,8,GRO,Haas F1 Team,11.0,89.015,20.0,0.0,Retired,,,,,,,1.149000000000001
+2,Bahrain Grand Prix,88,KUB,Williams,20.0,91.799,16.0,0.0,+2 Laps,,,,,,,3.933000000000007
+2,Bahrain Grand Prix,99,GIO,Alfa Romeo,16.0,90.026,11.0,0.0,Finished,,,,,,,2.1599999999999966
+3,Chinese Grand Prix,10,GAS,Red Bull,6.0,92.93,6.0,9.0,Finished,,,,,,,1.3830000000000098
+3,Chinese Grand Prix,11,PER,Racing Point,12.0,93.299,8.0,4.0,+1 Lap,,,,,,,1.7520000000000095
+3,Chinese Grand Prix,16,LEC,Ferrari,4.0,91.865,5.0,10.0,Finished,,,,,,,0.31799999999999784
+3,Chinese Grand Prix,18,STR,Racing Point,16.0,94.292,12.0,0.0,+1 Lap,,,,,,,2.7450000000000045
+3,Chinese Grand Prix,20,MAG,Haas F1 Team,9.0,93.15,13.0,0.0,+1 Lap,,,,,,,1.6030000000000086
+3,Chinese Grand Prix,23,ALB,Toro Rosso,,,10.0,1.0,+1 Lap,,,,,,,
+3,Chinese Grand Prix,26,KVY,Toro Rosso,11.0,93.236,19.0,0.0,Collision,,,,,,,1.6890000000000072
+3,Chinese Grand Prix,27,HUL,Renault,8.0,92.962,20.0,0.0,Power Unit,,,,,,,1.4150000000000063
+3,Chinese Grand Prix,3,RIC,Renault,7.0,92.958,7.0,6.0,+1 Lap,,,,,,,1.4110000000000014
+3,Chinese Grand Prix,33,VER,Red Bull,5.0,92.089,4.0,12.0,Finished,,,,,,,0.5420000000000016
+3,Chinese Grand Prix,4,NOR,McLaren,15.0,93.967,18.0,0.0,Collision,,,,,,,2.4200000000000017
+3,Chinese Grand Prix,44,HAM,Mercedes,2.0,91.57,1.0,25.0,Finished,,,,,,,0.022999999999996135
+3,Chinese Grand Prix,5,VET,Ferrari,3.0,91.848,3.0,15.0,Finished,,,,,,,0.30100000000000193
+3,Chinese Grand Prix,55,SAI,McLaren,14.0,93.523,14.0,0.0,+1 Lap,,,,,,,1.975999999999999
+3,Chinese Grand Prix,63,RUS,Williams,17.0,95.253,16.0,0.0,+2 Laps,,,,,,,3.706000000000003
+3,Chinese Grand Prix,7,RAI,Alfa Romeo,13.0,93.419,9.0,2.0,+1 Lap,,,,,,,1.8719999999999999
+3,Chinese Grand Prix,77,BOT,Mercedes,1.0,91.547,2.0,18.0,Finished,,,,,,,0.0
+3,Chinese Grand Prix,8,GRO,Haas F1 Team,10.0,93.156,11.0,0.0,+1 Lap,,,,,,,1.6090000000000089
+3,Chinese Grand Prix,88,KUB,Williams,18.0,95.281,17.0,0.0,+2 Laps,,,,,,,3.734000000000009
+3,Chinese Grand Prix,99,GIO,Alfa Romeo,19.0,,15.0,0.0,+1 Lap,,,,,,,
+4,Azerbaijan Grand Prix,10,GAS,Red Bull,,,17.0,0.0,Transmission,,,,,,,
+4,Azerbaijan Grand Prix,11,PER,Racing Point,5.0,101.593,6.0,8.0,Finished,,,,,,,1.097999999999999
+4,Azerbaijan Grand Prix,16,LEC,Ferrari,8.0,101.426,5.0,11.0,Finished,,,,,,,0.9309999999999974
+4,Azerbaijan Grand Prix,18,STR,Racing Point,13.0,102.63,9.0,2.0,Finished,,,,,,,2.134999999999991
+4,Azerbaijan Grand Prix,20,MAG,Haas F1 Team,12.0,102.382,13.0,0.0,+1 Lap,,,,,,,1.8870000000000005
+4,Azerbaijan Grand Prix,23,ALB,Toro Rosso,11.0,102.154,11.0,0.0,+1 Lap,,,,,,,1.6589999999999918
+4,Azerbaijan Grand Prix,26,KVY,Toro Rosso,6.0,101.681,19.0,0.0,Collision,,,,,,,1.1859999999999928
+4,Azerbaijan Grand Prix,27,HUL,Renault,15.0,103.427,14.0,0.0,+1 Lap,,,,,,,2.932000000000002
+4,Azerbaijan Grand Prix,3,RIC,Renault,10.0,102.477,20.0,0.0,Collision,,,,,,,1.9819999999999993
+4,Azerbaijan Grand Prix,33,VER,Red Bull,4.0,101.069,4.0,12.0,Finished,,,,,,,0.5739999999999981
+4,Azerbaijan Grand Prix,4,NOR,McLaren,7.0,101.886,8.0,4.0,Finished,,,,,,,1.3909999999999911
+4,Azerbaijan Grand Prix,44,HAM,Mercedes,2.0,100.554,2.0,18.0,Finished,,,,,,,0.0589999999999975
+4,Azerbaijan Grand Prix,5,VET,Ferrari,3.0,100.797,3.0,15.0,Finished,,,,,,,0.3019999999999925
+4,Azerbaijan Grand Prix,55,SAI,McLaren,9.0,101.936,7.0,6.0,Finished,,,,,,,1.4410000000000025
+4,Azerbaijan Grand Prix,63,RUS,Williams,16.0,105.062,15.0,0.0,+2 Laps,,,,,,,4.566999999999993
+4,Azerbaijan Grand Prix,7,RAI,Alfa Romeo,,,10.0,1.0,+1 Lap,,,,,,,
+4,Azerbaijan Grand Prix,77,BOT,Mercedes,1.0,100.495,1.0,25.0,Finished,,,,,,,0.0
+4,Azerbaijan Grand Prix,8,GRO,Haas F1 Team,14.0,103.407,18.0,0.0,Brakes,,,,,,,2.911999999999992
+4,Azerbaijan Grand Prix,88,KUB,Williams,,105.455,16.0,0.0,+2 Laps,,,,,,,4.959999999999994
+4,Azerbaijan Grand Prix,99,GIO,Alfa Romeo,17.0,102.14,12.0,0.0,+1 Lap,,,,,,,1.644999999999996
+5,Spanish Grand Prix,10,GAS,Red Bull,6.0,76.708,6.0,8.0,Finished,,,,,,,1.3019999999999925
+5,Spanish Grand Prix,11,PER,Racing Point,15.0,77.886,15.0,0.0,Finished,,,,,,,2.4799999999999898
+5,Spanish Grand Prix,16,LEC,Ferrari,5.0,76.588,5.0,10.0,Finished,,,,,,,1.181999999999988
+5,Spanish Grand Prix,18,STR,Racing Point,16.0,78.471,19.0,0.0,Collision,,,,,,,3.0649999999999977
+5,Spanish Grand Prix,20,MAG,Haas F1 Team,8.0,76.922,7.0,6.0,Finished,,,,,,,1.5159999999999911
+5,Spanish Grand Prix,23,ALB,Toro Rosso,11.0,77.445,11.0,0.0,Finished,,,,,,,2.0389999999999873
+5,Spanish Grand Prix,26,KVY,Toro Rosso,9.0,77.243,9.0,2.0,Finished,,,,,,,1.836999999999989
+5,Spanish Grand Prix,27,HUL,Renault,,78.404,13.0,0.0,Finished,,,,,,,2.9979999999999905
+5,Spanish Grand Prix,3,RIC,Renault,13.0,77.299,12.0,0.0,Finished,,,,,,,1.8930000000000007
+5,Spanish Grand Prix,33,VER,Red Bull,4.0,76.357,3.0,15.0,Finished,,,,,,,0.9509999999999934
+5,Spanish Grand Prix,4,NOR,McLaren,10.0,77.338,20.0,0.0,Collision,,,,,,,1.931999999999988
+5,Spanish Grand Prix,44,HAM,Mercedes,2.0,76.038,1.0,26.0,Finished,,,,,,,0.6319999999999908
+5,Spanish Grand Prix,5,VET,Ferrari,3.0,76.272,4.0,12.0,Finished,,,,,,,0.8659999999999997
+5,Spanish Grand Prix,55,SAI,McLaren,12.0,77.599,8.0,4.0,Finished,,,,,,,2.192999999999998
+5,Spanish Grand Prix,63,RUS,Williams,19.0,79.072,17.0,0.0,+1 Lap,,,,,,,3.665999999999997
+5,Spanish Grand Prix,7,RAI,Alfa Romeo,14.0,77.788,14.0,0.0,Finished,,,,,,,2.381999999999991
+5,Spanish Grand Prix,77,BOT,Mercedes,1.0,75.406,2.0,18.0,Finished,,,,,,,0.0
+5,Spanish Grand Prix,8,GRO,Haas F1 Team,7.0,76.911,10.0,1.0,Finished,,,,,,,1.5049999999999955
+5,Spanish Grand Prix,88,KUB,Williams,17.0,80.254,18.0,0.0,+1 Lap,,,,,,,4.847999999999999
+5,Spanish Grand Prix,99,GIO,Alfa Romeo,18.0,78.664,16.0,0.0,Finished,,,,,,,3.2579999999999956
+6,Monaco Grand Prix,10,GAS,Red Bull,8.0,71.041,5.0,11.0,Finished,,,,,,,0.875
+6,Monaco Grand Prix,11,PER,Racing Point,16.0,72.233,12.0,0.0,+1 Lap,,,,,,,2.0670000000000073
+6,Monaco Grand Prix,16,LEC,Ferrari,15.0,72.149,20.0,0.0,Collision,,,,,,,1.983000000000004
+6,Monaco Grand Prix,18,STR,Racing Point,17.0,72.846,16.0,0.0,+1 Lap,,,,,,,2.680000000000007
+6,Monaco Grand Prix,20,MAG,Haas F1 Team,5.0,71.109,14.0,0.0,+1 Lap,,,,,,,0.9429999999999978
+6,Monaco Grand Prix,23,ALB,Toro Rosso,10.0,71.429,8.0,4.0,Finished,,,,,,,1.2630000000000052
+6,Monaco Grand Prix,26,KVY,Toro Rosso,7.0,71.271,7.0,6.0,Finished,,,,,,,1.105000000000004
+6,Monaco Grand Prix,27,HUL,Renault,11.0,71.67,13.0,0.0,+1 Lap,,,,,,,1.5040000000000049
+6,Monaco Grand Prix,3,RIC,Renault,6.0,71.218,9.0,2.0,Finished,,,,,,,1.0520000000000067
+6,Monaco Grand Prix,33,VER,Red Bull,3.0,70.618,4.0,12.0,Finished,,,,,,,0.4519999999999982
+6,Monaco Grand Prix,4,NOR,McLaren,12.0,71.724,11.0,0.0,Finished,,,,,,,1.558000000000007
+6,Monaco Grand Prix,44,HAM,Mercedes,1.0,70.166,1.0,25.0,Finished,,,,,,,0.0
+6,Monaco Grand Prix,5,VET,Ferrari,4.0,70.947,2.0,18.0,Finished,,,,,,,0.7810000000000059
+6,Monaco Grand Prix,55,SAI,McLaren,9.0,71.417,6.0,8.0,Finished,,,,,,,1.2510000000000048
+6,Monaco Grand Prix,63,RUS,Williams,19.0,73.477,15.0,0.0,+1 Lap,,,,,,,3.311000000000007
+6,Monaco Grand Prix,7,RAI,Alfa Romeo,14.0,71.993,17.0,0.0,+1 Lap,,,,,,,1.8269999999999982
+6,Monaco Grand Prix,77,BOT,Mercedes,2.0,70.252,3.0,15.0,Finished,,,,,,,0.08599999999999852
+6,Monaco Grand Prix,8,GRO,Haas F1 Team,13.0,71.837,10.0,1.0,Finished,,,,,,,1.6710000000000065
+6,Monaco Grand Prix,88,KUB,Williams,20.0,73.751,18.0,0.0,+1 Lap,,,,,,,3.585000000000008
+6,Monaco Grand Prix,99,GIO,Alfa Romeo,18.0,71.976,19.0,0.0,+2 Laps,,,,,,,1.8100000000000023
+7,Canadian Grand Prix,10,GAS,Red Bull,5.0,71.079,8.0,4.0,+1 Lap,,,,,,,0.8389999999999986
+7,Canadian Grand Prix,11,PER,Racing Point,15.0,72.197,12.0,0.0,+1 Lap,,,,,,,1.9570000000000078
+7,Canadian Grand Prix,16,LEC,Ferrari,3.0,70.92,3.0,15.0,Finished,,,,,,,0.6800000000000068
+7,Canadian Grand Prix,18,STR,Racing Point,17.0,72.266,9.0,2.0,+1 Lap,,,,,,,2.0260000000000105
+7,Canadian Grand Prix,20,MAG,Haas F1 Team,,71.786,17.0,0.0,+2 Laps,,,,,,,1.5460000000000065
+7,Canadian Grand Prix,23,ALB,Toro Rosso,13.0,72.02,19.0,0.0,Collision damage,,,,,,,1.7800000000000011
+7,Canadian Grand Prix,26,KVY,Toro Rosso,10.0,71.921,10.0,1.0,+1 Lap,,,,,,,1.6810000000000116
+7,Canadian Grand Prix,27,HUL,Renault,7.0,71.324,7.0,6.0,+1 Lap,,,,,,,1.0840000000000032
+7,Canadian Grand Prix,3,RIC,Renault,4.0,71.071,6.0,8.0,+1 Lap,,,,,,,0.8310000000000031
+7,Canadian Grand Prix,33,VER,Red Bull,9.0,71.619,5.0,10.0,Finished,,,,,,,1.3790000000000049
+7,Canadian Grand Prix,4,NOR,McLaren,8.0,71.735,20.0,0.0,Suspension,,,,,,,1.4950000000000045
+7,Canadian Grand Prix,44,HAM,Mercedes,2.0,70.446,1.0,25.0,Finished,,,,,,,0.20600000000000307
+7,Canadian Grand Prix,5,VET,Ferrari,1.0,70.24,2.0,18.0,Finished,,,,,,,0.0
+7,Canadian Grand Prix,55,SAI,McLaren,11.0,71.572,11.0,0.0,+1 Lap,,,,,,,1.3320000000000078
+7,Canadian Grand Prix,63,RUS,Williams,18.0,73.617,16.0,0.0,+2 Laps,,,,,,,3.3770000000000095
+7,Canadian Grand Prix,7,RAI,Alfa Romeo,16.0,72.23,15.0,0.0,+1 Lap,,,,,,,1.990000000000009
+7,Canadian Grand Prix,77,BOT,Mercedes,6.0,71.095,4.0,13.0,Finished,,,,,,,0.855000000000004
+7,Canadian Grand Prix,8,GRO,Haas F1 Team,14.0,72.109,14.0,0.0,+1 Lap,,,,,,,1.8689999999999998
+7,Canadian Grand Prix,88,KUB,Williams,19.0,74.393,18.0,0.0,+3 Laps,,,,,,,4.153000000000006
+7,Canadian Grand Prix,99,GIO,Alfa Romeo,12.0,72.122,13.0,0.0,+1 Lap,,,,,,,1.882000000000005
+8,French Grand Prix,10,GAS,Red Bull,9.0,90.184,10.0,1.0,+1 Lap,,,,,,,1.8649999999999949
+8,French Grand Prix,11,PER,Racing Point,14.0,90.738,12.0,0.0,+1 Lap,,,,,,,2.418999999999997
+8,French Grand Prix,16,LEC,Ferrari,3.0,88.965,3.0,15.0,Finished,,,,,,,0.6460000000000008
+8,French Grand Prix,18,STR,Racing Point,17.0,91.726,13.0,0.0,+1 Lap,,,,,,,3.4069999999999965
+8,French Grand Prix,20,MAG,Haas F1 Team,15.0,91.166,17.0,0.0,+1 Lap,,,,,,,2.846999999999994
+8,French Grand Prix,23,ALB,Toro Rosso,11.0,90.461,15.0,0.0,+1 Lap,,,,,,,2.141999999999996
+8,French Grand Prix,26,KVY,Toro Rosso,19.0,91.564,14.0,0.0,+1 Lap,,,,,,,3.2449999999999903
+8,French Grand Prix,27,HUL,Renault,13.0,90.544,8.0,4.0,+1 Lap,,,,,,,2.2249999999999943
+8,French Grand Prix,3,RIC,Renault,8.0,89.918,11.0,0.0,+1 Lap,,,,,,,1.5990000000000038
+8,French Grand Prix,33,VER,Red Bull,4.0,89.409,4.0,12.0,Finished,,,,,,,1.0900000000000034
+8,French Grand Prix,4,NOR,McLaren,5.0,89.418,9.0,2.0,+1 Lap,,,,,,,1.0990000000000038
+8,French Grand Prix,44,HAM,Mercedes,1.0,88.319,1.0,25.0,Finished,,,,,,,0.0
+8,French Grand Prix,5,VET,Ferrari,7.0,89.506,5.0,11.0,Finished,,,,,,,1.1869999999999976
+8,French Grand Prix,55,SAI,McLaren,6.0,89.522,6.0,8.0,Finished,,,,,,,1.203000000000003
+8,French Grand Prix,63,RUS,Williams,20.0,92.789,19.0,0.0,+2 Laps,,,,,,,4.469999999999999
+8,French Grand Prix,7,RAI,Alfa Romeo,12.0,90.533,7.0,6.0,+1 Lap,,,,,,,2.2139999999999986
+8,French Grand Prix,77,BOT,Mercedes,2.0,88.605,2.0,18.0,Finished,,,,,,,0.28600000000000136
+8,French Grand Prix,8,GRO,Haas F1 Team,16.0,91.626,20.0,0.0,Retired,,,,,,,3.307000000000002
+8,French Grand Prix,88,KUB,Williams,18.0,93.205,18.0,0.0,+2 Laps,,,,,,,4.885999999999996
+8,French Grand Prix,99,GIO,Alfa Romeo,10.0,90.408,16.0,0.0,+1 Lap,,,,,,,2.0889999999999986
+9,Austrian Grand Prix,10,GAS,Red Bull,8.0,63.988,7.0,6.0,+1 Lap,,,,,,,0.9849999999999994
+9,Austrian Grand Prix,11,PER,Racing Point,13.0,64.789,11.0,0.0,+1 Lap,,,,,,,1.7860000000000014
+9,Austrian Grand Prix,16,LEC,Ferrari,1.0,63.003,2.0,18.0,Finished,,,,,,,0.0
+9,Austrian Grand Prix,18,STR,Racing Point,14.0,64.832,14.0,0.0,+1 Lap,,,,,,,1.8289999999999935
+9,Austrian Grand Prix,20,MAG,Haas F1 Team,10.0,64.072,19.0,0.0,+2 Laps,,,,,,,1.0690000000000026
+9,Austrian Grand Prix,23,ALB,Toro Rosso,18.0,64.665,15.0,0.0,+1 Lap,,,,,,,1.6620000000000061
+9,Austrian Grand Prix,26,KVY,Toro Rosso,16.0,65.324,17.0,0.0,+1 Lap,,,,,,,2.320999999999998
+9,Austrian Grand Prix,27,HUL,Renault,15.0,64.516,13.0,0.0,+1 Lap,,,,,,,1.5130000000000052
+9,Austrian Grand Prix,3,RIC,Renault,12.0,64.647,12.0,0.0,+1 Lap,,,,,,,1.6440000000000055
+9,Austrian Grand Prix,33,VER,Red Bull,2.0,63.439,1.0,26.0,Finished,,,,,,,0.43599999999999994
+9,Austrian Grand Prix,4,NOR,McLaren,5.0,64.099,6.0,8.0,+1 Lap,,,,,,,1.0960000000000036
+9,Austrian Grand Prix,44,HAM,Mercedes,4.0,63.262,5.0,10.0,Finished,,,,,,,0.25900000000000034
+9,Austrian Grand Prix,5,VET,Ferrari,9.0,63.667,4.0,12.0,Finished,,,,,,,0.6640000000000015
+9,Austrian Grand Prix,55,SAI,McLaren,19.0,64.453,8.0,4.0,+1 Lap,,,,,,,1.4500000000000028
+9,Austrian Grand Prix,63,RUS,Williams,,65.904,18.0,0.0,+2 Laps,,,,,,,2.9009999999999962
+9,Austrian Grand Prix,7,RAI,Alfa Romeo,6.0,64.056,9.0,2.0,+1 Lap,,,,,,,1.0529999999999973
+9,Austrian Grand Prix,77,BOT,Mercedes,3.0,63.537,3.0,15.0,Finished,,,,,,,0.5339999999999989
+9,Austrian Grand Prix,8,GRO,Haas F1 Team,11.0,64.49,16.0,0.0,+1 Lap,,,,,,,1.4869999999999948
+9,Austrian Grand Prix,88,KUB,Williams,17.0,66.206,20.0,0.0,+3 Laps,,,,,,,3.203000000000003
+9,Austrian Grand Prix,99,GIO,Alfa Romeo,7.0,64.179,10.0,1.0,+1 Lap,,,,,,,1.176000000000002
+10,British Grand Prix,10,GAS,Red Bull,5.0,85.59,4.0,12.0,Finished,,,,,,,0.4969999999999999
+10,British Grand Prix,11,PER,Racing Point,15.0,86.649,17.0,0.0,+1 Lap,,,,,,,1.5559999999999974
+10,British Grand Prix,16,LEC,Ferrari,3.0,85.172,3.0,15.0,Finished,,,,,,,0.07899999999999352
+10,British Grand Prix,18,STR,Racing Point,18.0,86.762,13.0,0.0,Finished,,,,,,,1.668999999999997
+10,British Grand Prix,20,MAG,Haas F1 Team,16.0,86.662,20.0,0.0,Collision,,,,,,,1.5690000000000026
+10,British Grand Prix,23,ALB,Toro Rosso,9.0,86.345,12.0,0.0,Finished,,,,,,,1.2519999999999953
+10,British Grand Prix,26,KVY,Toro Rosso,17.0,86.721,9.0,2.0,Finished,,,,,,,1.6280000000000001
+10,British Grand Prix,27,HUL,Renault,10.0,86.386,10.0,1.0,Finished,,,,,,,1.2929999999999922
+10,British Grand Prix,3,RIC,Renault,7.0,86.182,7.0,6.0,Finished,,,,,,,1.0889999999999986
+10,British Grand Prix,33,VER,Red Bull,4.0,85.276,5.0,10.0,Finished,,,,,,,0.18299999999999272
+10,British Grand Prix,4,NOR,McLaren,8.0,86.079,11.0,0.0,Finished,,,,,,,0.98599999999999
+10,British Grand Prix,44,HAM,Mercedes,2.0,85.099,1.0,26.0,Finished,,,,,,,0.006000000000000227
+10,British Grand Prix,5,VET,Ferrari,6.0,85.787,16.0,0.0,+1 Lap,,,,,,,0.6940000000000026
+10,British Grand Prix,55,SAI,McLaren,13.0,86.203,6.0,8.0,Finished,,,,,,,1.1099999999999994
+10,British Grand Prix,63,RUS,Williams,19.0,87.789,14.0,0.0,+1 Lap,,,,,,,2.695999999999998
+10,British Grand Prix,7,RAI,Alfa Romeo,12.0,86.546,8.0,4.0,Finished,,,,,,,1.453000000000003
+10,British Grand Prix,77,BOT,Mercedes,1.0,85.093,2.0,18.0,Finished,,,,,,,0.0
+10,British Grand Prix,8,GRO,Haas F1 Team,14.0,86.347,19.0,0.0,Collision,,,,,,,1.2539999999999907
+10,British Grand Prix,88,KUB,Williams,20.0,88.257,15.0,0.0,+1 Lap,,,,,,,3.1640000000000015
+10,British Grand Prix,99,GIO,Alfa Romeo,11.0,86.449,18.0,0.0,Spun off,,,,,,,1.3559999999999945
+11,German Grand Prix,10,GAS,Red Bull,4.0,72.385,14.0,0.0,Collision,,,,,,,0.6180000000000092
+11,German Grand Prix,11,PER,Racing Point,8.0,72.776,20.0,0.0,Spun off,,,,,,,1.0090000000000003
+11,German Grand Prix,16,LEC,Ferrari,10.0,72.229,17.0,0.0,Accident,,,,,,,0.4620000000000033
+11,German Grand Prix,18,STR,Racing Point,15.0,73.256,4.0,12.0,Finished,,,,,,,1.4890000000000043
+11,German Grand Prix,20,MAG,Haas F1 Team,12.0,72.789,8.0,4.0,Finished,,,,,,,1.0220000000000056
+11,German Grand Prix,23,ALB,Toro Rosso,16.0,73.461,6.0,8.0,Finished,,,,,,,1.6940000000000026
+11,German Grand Prix,26,KVY,Toro Rosso,14.0,73.135,3.0,15.0,Finished,,,,,,,1.3680000000000092
+11,German Grand Prix,27,HUL,Renault,9.0,72.766,16.0,0.0,Accident,,,,,,,0.9990000000000094
+11,German Grand Prix,3,RIC,Renault,13.0,72.799,19.0,0.0,Exhaust,,,,,,,1.0320000000000107
+11,German Grand Prix,33,VER,Red Bull,2.0,72.113,1.0,26.0,Finished,,,,,,,0.34600000000000364
+11,German Grand Prix,4,NOR,McLaren,19.0,73.333,18.0,0.0,Power loss,,,,,,,1.5660000000000025
+11,German Grand Prix,44,HAM,Mercedes,1.0,71.767,9.0,2.0,Finished,,,,,,,0.0
+11,German Grand Prix,5,VET,Ferrari,20.0,,2.0,18.0,Finished,,,,,,,
+11,German Grand Prix,55,SAI,McLaren,7.0,72.632,5.0,10.0,Finished,,,,,,,0.8650000000000091
+11,German Grand Prix,63,RUS,Williams,17.0,74.721,11.0,0.0,Finished,,,,,,,2.9540000000000077
+11,German Grand Prix,7,RAI,Alfa Romeo,5.0,72.519,12.0,0.0,Finished,,,,,,,0.7520000000000095
+11,German Grand Prix,77,BOT,Mercedes,3.0,72.129,15.0,0.0,Accident,,,,,,,0.362000000000009
+11,German Grand Prix,8,GRO,Haas F1 Team,6.0,72.769,7.0,6.0,Finished,,,,,,,1.0020000000000095
+11,German Grand Prix,88,KUB,Williams,18.0,74.839,10.0,1.0,Finished,,,,,,,3.0720000000000027
+11,German Grand Prix,99,GIO,Alfa Romeo,11.0,72.786,13.0,0.0,Finished,,,,,,,1.0190000000000055
+12,Hungarian Grand Prix,10,GAS,Red Bull,6.0,75.45,6.0,8.0,+1 Lap,,,,,,,0.8780000000000001
+12,Hungarian Grand Prix,11,PER,Racing Point,16.0,77.109,11.0,0.0,+1 Lap,,,,,,,2.536999999999992
+12,Hungarian Grand Prix,16,LEC,Ferrari,4.0,75.043,4.0,12.0,Finished,,,,,,,0.47100000000000364
+12,Hungarian Grand Prix,18,STR,Racing Point,18.0,77.542,17.0,0.0,+2 Laps,,,,,,,2.969999999999999
+12,Hungarian Grand Prix,20,MAG,Haas F1 Team,14.0,76.122,13.0,0.0,+1 Lap,,,,,,,1.5499999999999972
+12,Hungarian Grand Prix,23,ALB,Toro Rosso,12.0,76.687,10.0,1.0,+1 Lap,,,,,,,2.114999999999995
+12,Hungarian Grand Prix,26,KVY,Toro Rosso,13.0,76.692,15.0,0.0,+2 Laps,,,,,,,2.1199999999999903
+12,Hungarian Grand Prix,27,HUL,Renault,11.0,76.565,12.0,0.0,+1 Lap,,,,,,,1.992999999999995
+12,Hungarian Grand Prix,3,RIC,Renault,20.0,77.257,14.0,0.0,+1 Lap,,,,,,,2.6850000000000023
+12,Hungarian Grand Prix,33,VER,Red Bull,1.0,74.572,2.0,19.0,Finished,,,,,,,0.0
+12,Hungarian Grand Prix,4,NOR,McLaren,7.0,75.8,9.0,2.0,+1 Lap,,,,,,,1.2279999999999944
+12,Hungarian Grand Prix,44,HAM,Mercedes,3.0,74.769,1.0,25.0,Finished,,,,,,,0.19700000000000273
+12,Hungarian Grand Prix,5,VET,Ferrari,5.0,75.071,3.0,15.0,Finished,,,,,,,0.4989999999999952
+12,Hungarian Grand Prix,55,SAI,McLaren,8.0,75.852,5.0,10.0,+1 Lap,,,,,,,1.2800000000000011
+12,Hungarian Grand Prix,63,RUS,Williams,15.0,77.031,16.0,0.0,+2 Laps,,,,,,,2.459000000000003
+12,Hungarian Grand Prix,7,RAI,Alfa Romeo,10.0,76.041,7.0,6.0,+1 Lap,,,,,,,1.468999999999994
+12,Hungarian Grand Prix,77,BOT,Mercedes,2.0,74.59,8.0,4.0,+1 Lap,,,,,,,0.018000000000000682
+12,Hungarian Grand Prix,8,GRO,Haas F1 Team,9.0,76.013,20.0,0.0,Water pressure,,,,,,,1.4410000000000025
+12,Hungarian Grand Prix,88,KUB,Williams,19.0,78.324,19.0,0.0,+3 Laps,,,,,,,3.7519999999999953
+12,Hungarian Grand Prix,99,GIO,Alfa Romeo,17.0,76.804,18.0,0.0,+2 Laps,,,,,,,2.2319999999999993
+13,Belgian Grand Prix,10,GAS,Toro Rosso,13.0,106.435,9.0,2.0,Finished,,,,,,,3.915999999999997
+13,Belgian Grand Prix,11,PER,Racing Point,7.0,104.706,6.0,8.0,Finished,,,,,,,2.1869999999999976
+13,Belgian Grand Prix,16,LEC,Ferrari,1.0,102.519,1.0,25.0,Finished,,,,,,,0.0
+13,Belgian Grand Prix,18,STR,Racing Point,16.0,105.047,10.0,1.0,Finished,,,,,,,2.5279999999999916
+13,Belgian Grand Prix,20,MAG,Haas F1 Team,8.0,104.738,12.0,0.0,+1 Lap,,,,,,,2.218999999999994
+13,Belgian Grand Prix,23,ALB,Red Bull,17.0,105.528,5.0,10.0,Finished,,,,,,,3.0090000000000003
+13,Belgian Grand Prix,26,KVY,Toro Rosso,19.0,106.518,7.0,6.0,Finished,,,,,,,3.9989999999999952
+13,Belgian Grand Prix,27,HUL,Renault,12.0,104.542,8.0,4.0,Finished,,,,,,,2.022999999999996
+13,Belgian Grand Prix,3,RIC,Renault,10.0,104.103,14.0,0.0,+1 Lap,,,,,,,1.583999999999989
+13,Belgian Grand Prix,33,VER,Red Bull,5.0,103.69,20.0,0.0,Accident,,,,,,,1.1709999999999923
+13,Belgian Grand Prix,4,NOR,McLaren,11.0,104.847,11.0,0.0,Engine,,,,,,,2.3279999999999887
+13,Belgian Grand Prix,44,HAM,Mercedes,3.0,103.282,2.0,18.0,Finished,,,,,,,0.762999999999991
+13,Belgian Grand Prix,5,VET,Ferrari,2.0,103.037,4.0,13.0,Finished,,,,,,,0.5180000000000007
+13,Belgian Grand Prix,55,SAI,McLaren,15.0,106.507,19.0,0.0,Power loss,,,,,,,3.9879999999999995
+13,Belgian Grand Prix,63,RUS,Williams,14.0,107.548,15.0,0.0,+1 Lap,,,,,,,5.028999999999996
+13,Belgian Grand Prix,7,RAI,Alfa Romeo,6.0,104.14,16.0,0.0,+1 Lap,,,,,,,1.6209999999999951
+13,Belgian Grand Prix,77,BOT,Mercedes,4.0,103.415,3.0,15.0,Finished,,,,,,,0.8960000000000008
+13,Belgian Grand Prix,8,GRO,Haas F1 Team,9.0,104.797,13.0,0.0,+1 Lap,,,,,,,2.2779999999999916
+13,Belgian Grand Prix,88,KUB,Williams,,,17.0,0.0,+1 Lap,,,,,,,
+13,Belgian Grand Prix,99,GIO,Alfa Romeo,18.0,105.637,18.0,0.0,Accident,,,,,,,3.117999999999995
