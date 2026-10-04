@@ -252,12 +252,9 @@ def predict_round(model, features, target_round, mode="gain", use_features=None)
 
 def podium_points(pred_top3, actual_top3):
     """Podium scoring for the web app: +15 per exact position match,
-    +5 per predicted podium driver in the wrong slot, +100 perfect-podium bonus."""
-    points = sum(15 if p == a else (5 if p in actual_top3 else 0)
-                 for p, a in zip(pred_top3, actual_top3))
-    if list(pred_top3) == list(actual_top3):
-        points += 100
-    return points
+    +5 per predicted podium driver in the wrong slot."""
+    return sum(15 if p == a else (5 if p in actual_top3 else 0)
+               for p, a in zip(pred_top3, actual_top3))
 
 
 def backtest_records(features, min_train_rounds, profile="fast"):

@@ -225,8 +225,7 @@ else:
     # --- podium points table ----------------------------------------------
     st.subheader("Podium points")
     st.caption("+15 for a correct winner/P2/P3 prediction, +5 when a driver is picked on the "
-               "podium but in the wrong slot, and a **+100 bonus for a perfect podium**. "
-               "Maximum 145 points per round.")
+               "podium but in the wrong slot. Maximum 45 points per round.")
 
     pts = bt[["round", "event", "gain_points", "direct_points"]].copy()
     pts.columns = ["Round", "Event", "Gain model", "Direct model"]
