@@ -42,7 +42,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Restore fastf1 cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: cache
           key: fastf1-${{ github.run_id }}
@@ -59,11 +59,36 @@ jobs:
             ARGS="$ARGS --wait-on-limit"
           fi
           python scripts/refresh_data.py $ARGS
-      # Commit even when collection exits non-zero (some rounds missing):
-      # fetched rounds are valuable progress and resume on the next run.
+      # Save the fastf1 cache even when collection exits non-zero (some
+      # rounds missing): the plain cache action skips its post step on job
+      # failure, which would force every retry to re-download everything.
+      - name: Save fastf1 cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: cache
+          key: fastf1-${{ github.run_id }}
+      # Commit even when collection exits non-zero: fetched rounds are
+      # valuable progress and resume on the next run. A plain auto-commit
+      # push gets rejected whenever main advanced during a long collection
+      # run, silently losing that run's data — so rebase onto the latest
+      # main first (keeping our freshly collected CSVs on data/ conflicts)
+      # and retry the push.
       - name: Commit updated CSVs
         if: always()
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "Refresh bundled season data [skip ci]"
-          file_pattern: data/*.csv
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/*.csv
+          if git diff --cached --quiet; then
+            echo "No CSV changes to commit"
+            exit 0
+          fi
+          git commit -m "Refresh bundled season data [skip ci]"
+          if ! git pull --rebase origin main; then
+            echo "rebase conflict — keeping our collected data files"
+            git checkout --theirs -- data/ 2>/dev/null || true
+            git add data/*.csv
+            GIT_EDITOR=true git rebase --continue 2>/dev/null || git rebase --abort
+          fi
+          git push origin main
