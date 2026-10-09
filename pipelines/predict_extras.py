@@ -6,12 +6,17 @@ The selected model scores every driver of the target round with P(driver
 achieves the milestone); the top probability is the predicted driver. The
 pole model uses day-before-quali information only (FP1/FP2, sprint
 qualifying, past qualifying form — the same constraint the grid pipeline
-originally used); the other three predict race milestones from the
-pre-race information set (grid, FP1-FP3, sprint results, form and
-reliability — the same as the race pipeline). The first-retirement and
-fastest-lap targets are derived from race lap data, which neither of the
-other two pipelines collects, so this pipeline keeps its own season CSV
-(extras_season_{year}.csv).
+originally used), so it never needs the target round's qualifying and
+runs in three modes: "post" reviews a completed round, "pre" predicts
+after qualifying (the pole flag is known, so the call is scored) and
+"prequali" predicts before qualifying — entrants come from practice (or
+the last completed round) and the quali columns stay unknown. The other
+three milestones predict from the pre-race information set (grid,
+FP1-FP3, sprint results, form and reliability — the same as the race
+pipeline) and therefore require qualifying to have happened. The
+first-retirement and fastest-lap targets are derived from race lap data,
+which neither of the other two pipelines collects, so this pipeline keeps
+its own season CSV (extras_season_{year}.csv).
 
 These are classifiers, not regressors, so the model factory, the
 hyperparameter tuner (pooled cross-validated log loss instead of MAE) and
@@ -20,7 +25,7 @@ f1_common.py.
 """
 
 import argparse
-from datetime import datetime
+from datetime import datetime, timedelta
 from itertools import product
 
 import numpy as np
@@ -32,6 +37,7 @@ from sklearn.inspection import permutation_importance
 import f1_common as common
 
 MIN_TRAIN_ROUNDS = common.MIN_TRAIN_ROUNDS
+PRACTICE_BUFFER = timedelta(hours=2)
 
 PRACTICE_SESSIONS_QUALI = ("FP1", "FP2")   # pole model: day-before-quali only
 PRACTICE_SESSIONS_RACE = ("FP1", "FP2", "FP3")  # race milestones: pre-race
@@ -154,6 +160,10 @@ TARGETS = {
         "column": "pole",
         "rows_column": "quali_pos",
         "train_columns": ("quali_pos",),
+        # the pole feature set never includes the target round's
+        # qualifying, so this model can also predict a round before its
+        # qualifying has run (the race milestones need the grid and cannot)
+        "prequali": True,
         "features": POLE_FEATURES,
         "baseline_sort": (("quali_form_season", True), ("driver_number", True)),
         "baseline_note": "best average qualifying position this season",
@@ -400,6 +410,56 @@ def load_upcoming_round(year, round_number, event_name):
     return _merge_weekend_features(frame, year, round_number)
 
 
+def practice_entrants(year, round_number, sessions=PRACTICE_SESSIONS_RACE):
+    for identifier in sessions:
+        try:
+            session = fastf1.get_session(year, round_number, identifier)
+            session.load(laps=False, telemetry=False, weather=False, messages=False)
+            if not session.results.empty:
+                return session.results
+        except Exception:
+            continue
+    return None
+
+
+def load_upcoming_round_prequali(year, round_number, event_name, fallback):
+    """Pre-quali frame for the pole model: qualifying has not happened yet,
+    so there are no quali results. Entrants come from the first practice
+    session with results, or from the last completed round when no practice
+    has run either. The quali columns stay NaN and the pole flag is unknown
+    (0 for every driver), so the model's call is only scored once the round
+    completes."""
+    results = practice_entrants(year, round_number)
+    if results is not None:
+        entries = [(str(num), results.at[num, "Abbreviation"], results.at[num, "TeamName"])
+                   for num in results.index]
+    else:
+        entries = [(str(r.driver_number), r.driver, r.team) for r in fallback.itertuples()]
+    rows = []
+    for num, driver, team in entries:
+        rows.append({
+            "round": round_number,
+            "event": event_name,
+            "driver_number": num,
+            "driver": driver,
+            "team": team,
+            "grid": np.nan,
+            "quali_pos": np.nan,
+            "quali_time": np.nan,
+            "quali_delta": np.nan,
+            "finish": np.nan,
+            "points": 0.0,
+            "status": "",
+            "pole": 0,
+            "winner": 0,
+            "dnf": 0,
+            "first_dnf": 0,
+            "fastest_lap": 0,
+        })
+    frame = pd.DataFrame(rows, columns=RAW_COLUMNS)
+    return _merge_weekend_features(frame, year, round_number)
+
+
 def collect_season(year, schedule, refresh=False, rate_limit_wait=None):
     return common.collect_season(
         year, schedule,
@@ -556,10 +616,15 @@ def tune_classifier(X, y, rounds, categorical_features=None,
 
 def target_rows(features, round_number, name):
     """Rows of one round a model predicts over: quali participants for the
-    pole model, drivers with a grid slot for the race milestones."""
+    pole model, drivers with a grid slot for the race milestones. A
+    pre-quali pole target has no quali positions yet, so the pole model
+    scores every entrant of the round instead."""
     spec = TARGETS[name]
     rows = features[features["round"] == round_number]
-    return rows[rows[spec["rows_column"]].notna()]
+    eligible = rows[rows[spec["rows_column"]].notna()]
+    if eligible.empty and spec.get("prequali"):
+        return rows
+    return eligible
 
 
 def baseline_pick(rows, name):
@@ -633,8 +698,11 @@ def backtest_records(features, min_train_rounds, profile="fast", milestone="pole
     names, and the probability the model assigned to its own pick and to
     the actual driver. Rounds without a first retirement (nobody retired)
     score NaN when the first-retirement model is selected, so hit rates
-    average only over rounds where the milestone exists. Prints one live
-    progress line per trained model (streamed into the web app's log).
+    average only over rounds where the milestone exists. A pre-quali
+    target round (pole model) likewise rides along as the last row with
+    NaN hits — its outcome is not known yet, exactly like the
+    race-milestone rows of a pre-mode round. Prints one live progress
+    line per trained model (streamed into the web app's log).
     """
     spec = TARGETS[milestone]
     rounds = sorted(features["round"].unique())
@@ -806,6 +874,9 @@ def final_report(features, year, target, event_name, mode, profile="fast", miles
     if mode == "pre" and milestone == "pole":
         print("pre-race mode: qualifying has already decided pole, so this day-before-quali "
               "model's call is scored below")
+    if mode == "prequali":
+        print("pre-quali mode: qualifying has not happened yet, so this model predicts from")
+        print("practice, sprint qualifying and season form — run again after qualifying to score it")
     if "error" in pred:
         print(f"\nNo model — {pred['error']}")
         return pred
@@ -828,6 +899,20 @@ def final_report(features, year, target, event_name, mode, profile="fast", miles
     return pred
 
 
+def practice_done_by(row, now):
+    for name in ("Practice 3", "Practice 2", "Practice 1"):
+        utc = session_utc(row, name)
+        if utc is not None and utc < now - PRACTICE_BUFFER:
+            return True
+    return False
+
+
+def _prequali_note(row, now):
+    if not practice_done_by(row, now):
+        print(f"\nNo practice sessions have finished yet, so the pole model relies on")
+        print("season form only - run again after practice (or qualifying) for sharper predictions")
+
+
 def resolve_target(args, year, schedule, data):
     completed = sorted(data["round"].unique())
     if not completed:
@@ -839,12 +924,21 @@ def resolve_target(args, year, schedule, data):
         if race_utc is not None and race_utc > now:
             upcoming.append(row)
 
+    # only the pole model can run before a round's qualifying (its feature
+    # set never includes the target round's qualifying); the race
+    # milestones need the grid and keep requiring quali to be done
+    milestone = getattr(args, "milestone", None) or "pole"
+    prequali_ok = bool(TARGETS[milestone].get("prequali"))
+
     if args.next:
         if not upcoming:
             raise SystemExit("no upcoming race left on this season's calendar")
         row = upcoming[0]
         quali_utc = session_utc(row, "Qualifying")
         if quali_utc is None or quali_utc > now:
+            if prequali_ok:
+                _prequali_note(row, now)
+                return int(row["RoundNumber"]), "prequali", str(row["EventName"])
             raise SystemExit(f"qualifying for the {row['EventName']} has not happened yet, retry after quali")
         return int(row["RoundNumber"]), "pre", str(row["EventName"])
 
@@ -862,6 +956,9 @@ def resolve_target(args, year, schedule, data):
             raise SystemExit(f"round {rn} happened recently but is not in the cache yet, retry in a few hours")
         if quali_utc is not None and quali_utc < now:
             return rn, "pre", str(row["EventName"])
+        if prequali_ok:
+            _prequali_note(row, now)
+            return rn, "prequali", str(row["EventName"])
         raise SystemExit(f"cannot predict round {rn}: qualifying has not happened yet")
 
     if upcoming:
@@ -870,6 +967,11 @@ def resolve_target(args, year, schedule, data):
         if quali_utc is not None and quali_utc < now:
             print(f"\nNext round ({row['EventName']}) has qualifying done -> predicting its milestones")
             return int(row["RoundNumber"]), "pre", str(row["EventName"])
+        if prequali_ok:
+            print(f"\nQualifying for the next round ({row['EventName']}) has not happened yet,")
+            print(f"so the pole model predicts it before qualifying runs")
+            _prequali_note(row, now)
+            return int(row["RoundNumber"]), "prequali", str(row["EventName"])
         last_event = str(data.loc[data["round"] == completed[-1], "event"].iloc[0])
         print(f"\nQualifying for the next round ({row['EventName']}) has not happened yet,")
         print(f"so the models demonstrate on the last completed round instead")
@@ -889,7 +991,9 @@ def main():
     parser.add_argument("--predict-round", type=int, default=None,
                         help="round number to predict (default: auto-select)")
     parser.add_argument("--next", action="store_true",
-                        help="predict the next race weekend's milestones (requires its qualifying to be done)")
+                        help="predict the next race weekend's milestones (the race milestones "
+                             "require its qualifying to be done; the pole model also predicts "
+                             "before qualifying)")
     parser.add_argument("--min-train-rounds", type=int, default=MIN_TRAIN_ROUNDS,
                         help="minimum completed rounds needed before first prediction (default: 5)")
     parser.add_argument("--milestone", choices=list(TARGETS), default="pole",
@@ -919,7 +1023,12 @@ def main():
             raise SystemExit("no race data available")
 
     target, mode, event_name = resolve_target(args, year, schedule, data)
-    if mode == "pre":
+    if mode == "prequali":
+        completed_rounds = sorted(data["round"].unique())
+        fallback = data[data["round"] == completed_rounds[-1]]
+        upcoming = load_upcoming_round_prequali(year, target, event_name, fallback)
+        data = pd.concat([data[data["round"] != target], upcoming], ignore_index=True)
+    elif mode == "pre":
         upcoming = load_upcoming_round(year, target, event_name)
         data = pd.concat([data[data["round"] != target], upcoming], ignore_index=True)
 
