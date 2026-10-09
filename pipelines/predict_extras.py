@@ -1,16 +1,22 @@
-"""Milestone prediction: pole sitter, race winner, first retirement or
-fastest-lap driver — ONE small binary classifier per run, selected with the
-CLI --milestone flag or the web-app Milestone selectbox.
+"""Milestone prediction: pole sitter, race winner, first retirement,
+fastest-lap driver, sprint pole sitter or sprint winner — ONE small binary
+classifier per run, selected with the CLI --milestone flag or the web-app
+Milestone selectbox.
 
 The selected model scores every driver of the target round with P(driver
 achieves the milestone); the top probability is the predicted driver. The
 pole model uses day-before-quali information only (FP1/FP2, sprint
 qualifying, past qualifying form — the same constraint the grid pipeline
-originally used); the other three predict race milestones from the
-pre-race information set (grid, FP1-FP3, sprint results, form and
-reliability — the same as the race pipeline). The first-retirement and
-fastest-lap targets are derived from race lap data, which neither of the
-other two pipelines collects, so this pipeline keeps its own season CSV
+originally used); the race milestone models (winner / first retirement /
+fastest lap) use the pre-race information set (grid, FP1-FP3, sprint
+results, form and reliability — the same as the race pipeline). The sprint
+models (sprint pole / sprint winner) use pre-sprint-qualifying information
+(FP1, past sprint and quali form) and pre-sprint-race information (FP1 plus
+the sprint quali result) respectively, and exist on sprint weekends only —
+their targets are derived from the stored sprint_quali_pos / sprint_finish
+columns, so no CSV schema change. The first-retirement and fastest-lap
+targets are derived from race lap data, which neither of the other two
+pipelines collects, so this pipeline keeps its own season CSV
 (extras_season_{year}.csv).
 
 These are classifiers, not regressors, so the model factory, the
@@ -148,6 +154,50 @@ FASTEST_LAP_FEATURES = [
     "team_id",
 ]
 
+# The sprint models only ever see sprint rounds (train_columns) and score
+# the sprint quali participants of the target round (rows_column). Chronology
+# on a 2026 sprint weekend: FP1 -> sprint quali (Friday), sprint race ->
+# GP qualifying (Saturday), race (Sunday). So sprint pole may use FP1 and
+# past history but NOT this weekend's sprint quali/race results, and sprint
+# win may additionally use this weekend's sprint quali result but NOT the
+# sprint race results or the GP qualifying.
+SPRINT_POLE_FEATURES = [
+    "fp12_best_delta",
+    "fp12_race_pace_delta",
+    "fp12_laps",
+    "team_fp12_best_delta",
+    "team_fp12_race_pace_delta",
+    "quali_pos_last",
+    "quali_form_3",
+    "quali_form_season",
+    "team_quali_form_3",
+    "team_quali_form_season",
+    "sprint_quali_pos_last",
+    "sprint_quali_form_season",
+    "sprint_finish_last",
+    "driver_points_before",
+    "team_points_before",
+    "team_id",
+]
+
+SPRINT_WIN_FEATURES = [
+    "sprint_quali_pos",
+    "sprint_quali_delta",
+    "fp12_best_delta",
+    "fp12_race_pace_delta",
+    "fp12_laps",
+    "team_fp12_best_delta",
+    "team_fp12_race_pace_delta",
+    "quali_form_3",
+    "quali_form_season",
+    "sprint_quali_pos_last",
+    "sprint_quali_form_season",
+    "sprint_finish_last",
+    "sprint_form_season",
+    "driver_points_before",
+    "team_id",
+]
+
 TARGETS = {
     "pole": {
         "label": "Pole position",
@@ -157,6 +207,7 @@ TARGETS = {
         "features": POLE_FEATURES,
         "baseline_sort": (("quali_form_season", True), ("driver_number", True)),
         "baseline_note": "best average qualifying position this season",
+        "pre_scored": True,
     },
     "winner": {
         "label": "Race winner",
@@ -184,6 +235,26 @@ TARGETS = {
         "features": FASTEST_LAP_FEATURES,
         "baseline_sort": (("driver_fl_before", False), ("quali_delta", True), ("driver_number", True)),
         "baseline_note": "most fastest laps this season, then the fastest qualifier",
+    },
+    "sprint_pole": {
+        "label": "Sprint pole",
+        "column": "sprint_pole",
+        "rows_column": "sprint_quali_pos",
+        "train_columns": ("sprint_quali_pos",),
+        "features": SPRINT_POLE_FEATURES,
+        "baseline_sort": (("sprint_quali_form_season", True), ("quali_form_season", True), ("driver_number", True)),
+        "baseline_note": "best previous sprint-quali form, then best season quali form",
+        "pre_scored": True,
+    },
+    "sprint_win": {
+        "label": "Sprint winner",
+        "column": "sprint_win",
+        "rows_column": "sprint_quali_pos",
+        "train_columns": ("sprint_finish",),
+        "features": SPRINT_WIN_FEATURES,
+        "baseline_sort": (("sprint_quali_pos", True), ("driver_number", True)),
+        "baseline_note": "the sprint pole sitter (sprint grid P1)",
+        "pre_scored": True,
     },
 }
 
@@ -427,6 +498,11 @@ def build_features(data):
     df["team_fp12_best_delta"] = df.groupby(["round", "team"], sort=False)["fp12_best_delta"].transform("mean")
     df["team_fp12_race_pace_delta"] = df.groupby(["round", "team"], sort=False)["fp12_race_pace_delta"].transform("mean")
 
+    # sprint milestone targets, derived from the stored sprint quali/race
+    # columns (no CSV schema change): 0 everywhere on non-sprint weekends
+    df["sprint_pole"] = (df["sprint_quali_pos"] == 1).astype(int)
+    df["sprint_win"] = (df["sprint_finish"] == 1).astype(int)
+
     by_driver = df.groupby("driver_number", sort=False)
     # race form (all shifted: information from before the round)
     df["driver_last_finish"] = by_driver["finish"].transform(lambda s: s.shift(1))
@@ -443,6 +519,17 @@ def build_features(data):
     df["driver_dnf_last"] = by_driver["dnf"].transform(lambda s: s.shift(1)).fillna(0.0)
     df["driver_dnf_rate_season"] = by_driver["dnf"].transform(lambda s: s.shift(1).expanding(min_periods=1).mean())
     df["team_dnf_rate_season"] = by_driver["team_dnf_mean"].transform(lambda s: s.shift(1).expanding(min_periods=1).mean())
+    # sprint history — a driver's previous sprint results only (shift over
+    # the non-null entries, so weekend N sees sprint weekends < N and never
+    # its own; NaN between sprints and before the first one)
+    df["sprint_quali_pos_last"] = by_driver["sprint_quali_pos"].transform(
+        lambda s: s.dropna().shift(1).reindex(s.index))
+    df["sprint_quali_form_season"] = by_driver["sprint_quali_pos"].transform(
+        lambda s: s.dropna().shift(1).reindex(s.index).expanding(min_periods=1).mean())
+    df["sprint_finish_last"] = by_driver["sprint_finish"].transform(
+        lambda s: s.dropna().shift(1).reindex(s.index))
+    df["sprint_form_season"] = by_driver["sprint_finish"].transform(
+        lambda s: s.dropna().shift(1).reindex(s.index).expanding(min_periods=1).mean())
     # quali form
     df["quali_pos_last"] = by_driver["quali_pos"].transform(lambda s: s.shift(1))
     df["quali_form_3"] = by_driver["quali_pos"].transform(lambda s: s.shift(1).rolling(3, min_periods=1).mean())
@@ -613,10 +700,14 @@ def train_model(features, target_round, name, profile="fast"):
 
 def predict_round(model, features, target_round, name, use_features=None):
     """Score every eligible driver of the round; rows sorted by predicted
-    probability (ties broken by the driver_number pre-sort)."""
+    probability (ties broken by the driver_number pre-sort). Returns an
+    empty frame when the round has no eligible candidates (e.g. a
+    non-sprint weekend for the sprint milestones)."""
     spec = TARGETS[name]
     use_features = spec["features"] if use_features is None else use_features
     rows = target_rows(features, target_round, name).copy()
+    if rows.empty:
+        return rows
     rows = rows.sort_values("driver_number")
     rows["probability"] = model.predict_proba(rows[use_features].to_numpy(dtype=float))[:, 1]
     rows["pred_rank"] = rows["probability"].rank(method="first", ascending=False).astype(int)
@@ -633,8 +724,10 @@ def backtest_records(features, min_train_rounds, profile="fast", milestone="pole
     names, and the probability the model assigned to its own pick and to
     the actual driver. Rounds without a first retirement (nobody retired)
     score NaN when the first-retirement model is selected, so hit rates
-    average only over rounds where the milestone exists. Prints one live
-    progress line per trained model (streamed into the web app's log).
+    average only over rounds where the milestone exists; rounds with no
+    eligible candidates at all (non-sprint weekends for the sprint
+    milestones) are skipped. Prints one live progress line per trained
+    model (streamed into the web app's log).
     """
     spec = TARGETS[milestone]
     rounds = sorted(features["round"].unique())
@@ -642,6 +735,10 @@ def backtest_records(features, min_train_rounds, profile="fast", milestone="pole
     records = []
     for r in rounds:
         if sum(1 for x in rounds if x < r) < min_train_rounds:
+            continue
+        # a round with no eligible candidates (a non-sprint weekend for
+        # the sprint milestones) has nothing to predict or score
+        if features.loc[features["round"] == r, spec["rows_column"]].notna().sum() == 0:
             continue
         event = str(features.loc[features["round"] == r, "event"].iloc[0])
         rec = {"round": r, "event": event,
@@ -713,7 +810,12 @@ def backtest_report(records, milestone="pole"):
         return
     n = len(records)
     n_scored = sum(1 for rec in records if pd.notna(rec.get("hit")))
-    denom = f" ({n_scored} rounds with a retirement)" if milestone == "first_dnf" else ""
+    if milestone == "first_dnf":
+        denom = f" ({n_scored} rounds with a retirement)"
+    elif milestone.startswith("sprint_"):
+        denom = " (sprint weekends)"
+    else:
+        denom = ""
     print(f"\nMean over {n} predicted rounds{denom}:")
     for title, field in (("model top-1 hit", "hit"), ("model top-3 hit", "top3"),
                          ("baseline hit", "base")):
@@ -729,9 +831,11 @@ def final_predictions(features, target, profile="fast", milestone="pole"):
     training frame, the feature list it actually used, the hyperparameters
     the profile picked, the ranked prediction table (with probabilities),
     the top pick, the naive baseline pick, and the actual milestone
-    drivers when already known (pole always — qualifying precedes the
-    race; the race milestones only in post mode). When the model cannot
-    train (e.g. no positive examples in the training rounds) the entry
+    drivers when already known (milestones with pre_scored in TARGETS —
+    pole, sprint pole and sprint winner — are all decided before the race,
+    so they are scored even in pre mode; the other race milestones only in
+    post mode). When the model cannot train or the round has no eligible
+    candidates (e.g. a non-sprint weekend), the entry
     carries an "error" message instead. Prints one live progress line
     (streamed into the web app's log).
     """
@@ -743,6 +847,10 @@ def final_predictions(features, target, profile="fast", milestone="pole"):
     except ValueError as exc:
         return {"name": milestone, "error": str(exc)}
     table = predict_round(model, features, target, milestone, used)
+    if table.empty:
+        suffix = " (sprint weekends only)" if milestone.startswith("sprint_") else ""
+        return {"name": milestone,
+                "error": f"no {spec['label'].lower()} candidates for this round{suffix}"}
     actual = sorted(actual_drivers(features, target, milestone))
     top1 = str(table.iloc[0]["driver"])
     return {
@@ -803,9 +911,9 @@ def final_report(features, year, target, event_name, mode, profile="fast", miles
     pred = final_predictions(features, target, profile, milestone)
     spec = TARGETS[milestone]
     print(f"\n=== Prediction: {year} {event_name} (round {target}) — {spec['label']} ===")
-    if mode == "pre" and milestone == "pole":
-        print("pre-race mode: qualifying has already decided pole, so this day-before-quali "
-              "model's call is scored below")
+    if mode == "pre" and spec.get("pre_scored"):
+        print(f"pre-race mode: the {spec['label'].lower()} is already decided (it happens "
+              "before the race), so the model's call is scored below")
     if "error" in pred:
         print(f"\nNo model — {pred['error']}")
         return pred
@@ -817,7 +925,7 @@ def final_report(features, year, target, event_name, mode, profile="fast", miles
     if pred["actual"]:
         verdict = "hit" if pred["top1"] in pred["actual"] else "miss"
         print(f"  actual: {' / '.join(pred['actual'])}  ({verdict})")
-    elif mode == "post" or milestone == "pole":
+    elif mode == "post" or spec.get("pre_scored"):
         print("  actual: not known yet")
     if profile == "optimized":
         untuned = "fast defaults (no clearly better combination found)"
@@ -882,8 +990,8 @@ def resolve_target(args, year, schedule, data):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="F1 milestone prediction (pole, winner, first retirement, fastest lap) "
-                    "using fastf1 and gradient boosting")
+        description="F1 milestone prediction (pole, winner, first retirement, fastest lap, "
+                    "sprint pole, sprint winner) using fastf1 and gradient boosting")
     parser.add_argument("--season", type=int, default=None,
                         help="season year (default: current year, falls back to previous year)")
     parser.add_argument("--predict-round", type=int, default=None,
@@ -893,9 +1001,9 @@ def main():
     parser.add_argument("--min-train-rounds", type=int, default=MIN_TRAIN_ROUNDS,
                         help="minimum completed rounds needed before first prediction (default: 5)")
     parser.add_argument("--milestone", choices=list(TARGETS), default="pole",
-                        help="which milestone model to run: pole, winner, first_dnf or "
-                             "fastest_lap — only this one model is trained and backtested "
-                             "(default: pole)")
+                        help="which milestone model to run: pole, winner, first_dnf, "
+                             "fastest_lap, sprint_pole or sprint_win — only this one model "
+                             "is trained and backtested (default: pole)")
     parser.add_argument("--model", choices=common.MODEL_PROFILES, default="fast",
                         help="model profile: 'fast' uses fixed hyperparameters, "
                              "'optimized' tunes them per model by minimizing "

@@ -28,13 +28,16 @@ NOTICE_KEY = f"{KIND}_reload_notice"
 MILESTONE_OPTIONS = {spec["label"]: name for name, spec in predict_extras.TARGETS.items()}
 
 st.title("Milestones & Extras: one model, one pick")
-st.caption("Four small models, each predicting a single weekend milestone instead of a "
+st.caption("Six small models, each predicting a single weekend milestone instead of a "
            "full order — pick one in the sidebar and only it runs. **Pole position** uses "
            "day-before-quali information only (FP1/FP2, sprint qualifying, past quali "
            "form). **Race winner**, **First retirement** and **Fastest lap** use the "
            "pre-race information set (grid, FP1–FP3, sprint results, form and "
-           "reliability history). Each model scores every driver with a probability; the "
-           "top pick is the prediction, always compared against a naive baseline.")
+           "reliability history). **Sprint pole** and **Sprint winner** predict the "
+           "sprint weekend's qualifying and race from Friday practice and past sprint / "
+           "quali form — they exist on sprint weekends only. Each model scores every "
+           "driver with a probability; the top pick is the prediction, always compared "
+           "against a naive baseline.")
 
 if VERSION_KEY not in st.session_state:
     st.session_state[VERSION_KEY] = 0
@@ -114,9 +117,9 @@ driver_team = features.groupby("driver")["team"].last().to_dict()
 headline = f"{used_year} {event_name} — round {target}"
 if mode == "pre":
     st.subheader(f":material/rocket_launch: Prediction: {headline} — {spec['label']}")
-    if result["milestone"] == "pole":
-        st.caption("Pre-race mode. The grid is known from qualifying, so this "
-                   "day-before-quali model's pole call is already scored below.")
+    if spec.get("pre_scored"):
+        st.caption(f"Pre-race mode. The {spec['label'].lower()} happens before the race, "
+                   "so the model's call is already scored below.")
     else:
         st.caption("Pre-race mode. The grid is known from qualifying; this race "
                    "milestone stays unknown until the race runs.")
@@ -212,7 +215,8 @@ else:
                           f"{100 * top3_rate:.0f}%" if pd.notna(top3_rate) else "–")
     metric_cols[3].metric("Rounds scored", scored,
                           help="Rounds the milestone exists in (a race with no retirement "
-                               "has no first retiree).")
+                               "has no first retiree; the sprint milestones only exist on "
+                               "sprint weekends).")
 
     if result["milestone"] == "first_dnf":
         st.caption("First-retirement rates average only over rounds with at least one "
