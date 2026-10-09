@@ -71,7 +71,7 @@ round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_ra
 4,British Grand Prix,33,VER,Red Bull,3.0,85.325,2.0,19.0,Finished,,,,,,,1.0220000000000056
 4,British Grand Prix,4,NOR,McLaren,5.0,85.782,5.0,10.0,Finished,,,,,,,1.4789999999999992
 4,British Grand Prix,44,HAM,Mercedes,1.0,84.303,1.0,25.0,Finished,,,,,,,0.0
-4,British Grand Prix,5,VET,Ferrari,10.0,86.339,10.0,1.0,Finished,,,,,,,2.0360000000000014
+4,British Grand Prix,5,VET,Ferrari,10.0,86.339,10.0,1.0,Finished,,,,,,,2.036000000000002
 4,British Grand Prix,55,SAI,McLaren,7.0,85.965,13.0,0.0,Finished,,,,,,,1.662000000000006
 4,British Grand Prix,6,LAT,Williams,18.0,87.705,15.0,0.0,Finished,,,,,,,3.402000000000001
 4,British Grand Prix,63,RUS,Williams,20.0,86.732,12.0,0.0,Finished,,,,,,,2.429000000000002
@@ -268,7 +268,7 @@ round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_ra
 14,Turkish Grand Prix,26,KVY,AlphaTauri,16.0,129.07,12.0,0.0,+1 Lap,,,,,,,21.304999999999993
 14,Turkish Grand Prix,3,RIC,Renault,5.0,111.595,10.0,1.0,Finished,,,,,,,3.8299999999999983
 14,Turkish Grand Prix,31,OCO,Renault,7.0,112.622,11.0,0.0,+1 Lap,,,,,,,4.856999999999999
-14,Turkish Grand Prix,33,VER,Red Bull,2.0,108.055,6.0,8.0,Finished,,,,,,,0.29000000000000625
+14,Turkish Grand Prix,33,VER,Red Bull,2.0,108.055,6.0,8.0,Finished,,,,,,,0.2900000000000062
 14,Turkish Grand Prix,4,NOR,McLaren,14.0,114.945,8.0,5.0,Finished,,,,,,,7.179999999999993
 14,Turkish Grand Prix,44,HAM,Mercedes,6.0,112.56,1.0,25.0,Finished,,,,,,,4.795000000000002
 14,Turkish Grand Prix,5,VET,Ferrari,11.0,115.169,3.0,15.0,Finished,,,,,,,7.403999999999996
@@ -281,8 +281,8 @@ round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_ra
 14,Turkish Grand Prix,99,GIO,Alfa Romeo,10.0,113.431,20.0,0.0,Gearbox,,,,,,,5.665999999999997
 15,Bahrain Grand Prix,10,GAS,AlphaTauri,8.0,88.448,6.0,8.0,Finished,,,,,,,1.1839999999999975
 15,Bahrain Grand Prix,11,PER,Racing Point,5.0,88.322,18.0,0.0,Engine,,,,,,,1.058000000000007
-15,Bahrain Grand Prix,16,LEC,Ferrari,12.0,89.137,10.0,1.0,+1 Lap,,,,,,,1.8730000000000047
-15,Bahrain Grand Prix,18,STR,Racing Point,13.0,88.679,19.0,0.0,Collision,,,,,,,1.4150000000000063
+15,Bahrain Grand Prix,16,LEC,Ferrari,12.0,89.137,10.0,1.0,+1 Lap,,,,,,,1.8730000000000049
+15,Bahrain Grand Prix,18,STR,Racing Point,13.0,88.679,19.0,0.0,Collision,,,,,,,1.4150000000000065
 15,Bahrain Grand Prix,20,MAG,Haas F1 Team,18.0,90.111,17.0,0.0,+1 Lap,,,,,,,2.8470000000000084
 15,Bahrain Grand Prix,23,ALB,Red Bull,4.0,88.274,3.0,15.0,Finished,,,,,,,1.0100000000000051
 15,Bahrain Grand Prix,26,KVY,AlphaTauri,10.0,88.618,11.0,0.0,+1 Lap,,,,,,,1.3539999999999992
@@ -291,8 +291,8 @@ round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_ra
 15,Bahrain Grand Prix,33,VER,Red Bull,3.0,87.678,2.0,19.0,Finished,,,,,,,0.4140000000000015
 15,Bahrain Grand Prix,4,NOR,McLaren,9.0,88.542,4.0,12.0,Finished,,,,,,,1.2780000000000058
 15,Bahrain Grand Prix,44,HAM,Mercedes,1.0,87.264,1.0,25.0,Finished,,,,,,,0.0
-15,Bahrain Grand Prix,5,VET,Ferrari,11.0,89.142,13.0,0.0,+1 Lap,,,,,,,1.8780000000000001
-15,Bahrain Grand Prix,55,SAI,McLaren,15.0,88.975,5.0,10.0,Finished,,,,,,,1.7109999999999985
+15,Bahrain Grand Prix,5,VET,Ferrari,11.0,89.142,13.0,0.0,+1 Lap,,,,,,,1.878
+15,Bahrain Grand Prix,55,SAI,McLaren,15.0,88.975,5.0,10.0,Finished,,,,,,,1.7109999999999983
 15,Bahrain Grand Prix,6,LAT,Williams,20.0,90.182,14.0,0.0,+1 Lap,,,,,,,2.9180000000000064
 15,Bahrain Grand Prix,63,RUS,Williams,14.0,89.294,12.0,0.0,+1 Lap,,,,,,,2.030000000000001
 15,Bahrain Grand Prix,7,RAI,Alfa Romeo,17.0,89.81,15.0,0.0,+1 Lap,,,,,,,2.5460000000000065
@@ -302,40 +302,40 @@ round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_ra
 16,Sakhir Grand Prix,10,GAS,AlphaTauri,9.0,53.941,11.0,0.0,Finished,,,,,,,0.5640000000000001
 16,Sakhir Grand Prix,11,PER,Racing Point,5.0,53.787,1.0,25.0,Finished,,,,,,,0.4099999999999966
 16,Sakhir Grand Prix,16,LEC,Ferrari,4.0,53.613,20.0,0.0,Collision,,,,,,,0.2359999999999971
-16,Sakhir Grand Prix,18,STR,Racing Point,10.0,53.84,3.0,15.0,Finished,,,,,,,0.46300000000000097
-16,Sakhir Grand Prix,20,MAG,Haas F1 Team,15.0,54.705,15.0,0.0,Finished,,,,,,,1.3279999999999959
+16,Sakhir Grand Prix,18,STR,Racing Point,10.0,53.84,3.0,15.0,Finished,,,,,,,0.4630000000000009
+16,Sakhir Grand Prix,20,MAG,Haas F1 Team,15.0,54.705,15.0,0.0,Finished,,,,,,,1.327999999999996
 16,Sakhir Grand Prix,23,ALB,Red Bull,12.0,54.026,6.0,8.0,Finished,,,,,,,0.6490000000000009
 16,Sakhir Grand Prix,26,KVY,AlphaTauri,6.0,53.856,7.0,6.0,Finished,,,,,,,0.4789999999999992
 16,Sakhir Grand Prix,3,RIC,Renault,7.0,53.871,5.0,10.0,Finished,,,,,,,0.4939999999999998
 16,Sakhir Grand Prix,31,OCO,Renault,11.0,53.995,2.0,18.0,Finished,,,,,,,0.617999999999995
-16,Sakhir Grand Prix,33,VER,Red Bull,3.0,53.433,19.0,0.0,Accident,,,,,,,0.055999999999997385
+16,Sakhir Grand Prix,33,VER,Red Bull,3.0,53.433,19.0,0.0,Accident,,,,,,,0.0559999999999973
 16,Sakhir Grand Prix,4,NOR,McLaren,19.0,54.194,10.0,1.0,Finished,,,,,,,0.8170000000000002
 16,Sakhir Grand Prix,5,VET,Ferrari,13.0,54.175,12.0,0.0,Finished,,,,,,,0.7979999999999947
 16,Sakhir Grand Prix,51,FIT,Haas F1 Team,20.0,55.426,17.0,0.0,Finished,,,,,,,2.0489999999999995
 16,Sakhir Grand Prix,55,SAI,McLaren,8.0,53.818,4.0,12.0,Finished,,,,,,,0.4409999999999954
 16,Sakhir Grand Prix,6,LAT,Williams,16.0,54.796,18.0,0.0,Engine,,,,,,,1.418999999999997
-16,Sakhir Grand Prix,63,RUS,Mercedes,2.0,53.403,9.0,3.0,Finished,,,,,,,0.02599999999999625
-16,Sakhir Grand Prix,7,RAI,Alfa Romeo,18.0,54.963,14.0,0.0,Finished,,,,,,,1.5859999999999985
+16,Sakhir Grand Prix,63,RUS,Mercedes,2.0,53.403,9.0,3.0,Finished,,,,,,,0.0259999999999962
+16,Sakhir Grand Prix,7,RAI,Alfa Romeo,18.0,54.963,14.0,0.0,Finished,,,,,,,1.5859999999999983
 16,Sakhir Grand Prix,77,BOT,Mercedes,1.0,53.377,8.0,4.0,Finished,,,,,,,0.0
 16,Sakhir Grand Prix,89,AIT,Williams,17.0,54.892,16.0,0.0,Finished,,,,,,,1.5150000000000006
 16,Sakhir Grand Prix,99,GIO,Alfa Romeo,14.0,54.377,13.0,0.0,Finished,,,,,,,1.0
-17,Abu Dhabi Grand Prix,10,GAS,AlphaTauri,9.0,96.242,8.0,4.0,Finished,,,,,,,0.9960000000000093
+17,Abu Dhabi Grand Prix,10,GAS,AlphaTauri,9.0,96.242,8.0,4.0,Finished,,,,,,,0.9960000000000092
 17,Abu Dhabi Grand Prix,11,PER,Racing Point,19.0,96.034,20.0,0.0,Transmission,,,,,,,0.7880000000000109
 17,Abu Dhabi Grand Prix,16,LEC,Ferrari,12.0,95.881,13.0,0.0,+1 Lap,,,,,,,0.6350000000000051
 17,Abu Dhabi Grand Prix,18,STR,Racing Point,8.0,96.046,10.0,1.0,Finished,,,,,,,0.8000000000000114
 17,Abu Dhabi Grand Prix,20,MAG,Haas F1 Team,20.0,97.863,18.0,0.0,+1 Lap,,,,,,,2.6170000000000044
-17,Abu Dhabi Grand Prix,23,ALB,Red Bull,5.0,95.571,4.0,12.0,Finished,,,,,,,0.32500000000000284
+17,Abu Dhabi Grand Prix,23,ALB,Red Bull,5.0,95.571,4.0,12.0,Finished,,,,,,,0.3250000000000028
 17,Abu Dhabi Grand Prix,26,KVY,AlphaTauri,7.0,95.963,11.0,0.0,+1 Lap,,,,,,,0.7169999999999987
 17,Abu Dhabi Grand Prix,3,RIC,Renault,11.0,96.406,7.0,7.0,Finished,,,,,,,1.1600000000000108
 17,Abu Dhabi Grand Prix,31,OCO,Renault,10.0,96.359,9.0,2.0,Finished,,,,,,,1.1129999999999995
 17,Abu Dhabi Grand Prix,33,VER,Red Bull,1.0,95.246,1.0,25.0,Finished,,,,,,,0.0
 17,Abu Dhabi Grand Prix,4,NOR,McLaren,4.0,95.497,5.0,10.0,Finished,,,,,,,0.2510000000000048
-17,Abu Dhabi Grand Prix,44,HAM,Mercedes,3.0,95.332,3.0,15.0,Finished,,,,,,,0.08599999999999852
+17,Abu Dhabi Grand Prix,44,HAM,Mercedes,3.0,95.332,3.0,15.0,Finished,,,,,,,0.0859999999999985
 17,Abu Dhabi Grand Prix,5,VET,Ferrari,13.0,96.631,14.0,0.0,+1 Lap,,,,,,,1.3850000000000051
 17,Abu Dhabi Grand Prix,51,FIT,Haas F1 Team,17.0,98.173,19.0,0.0,+2 Laps,,,,,,,2.9270000000000067
 17,Abu Dhabi Grand Prix,55,SAI,McLaren,6.0,95.815,6.0,8.0,Finished,,,,,,,0.5690000000000026
 17,Abu Dhabi Grand Prix,6,LAT,Williams,18.0,98.443,17.0,0.0,+1 Lap,,,,,,,3.1970000000000027
 17,Abu Dhabi Grand Prix,63,RUS,Williams,16.0,98.045,15.0,0.0,+1 Lap,,,,,,,2.7990000000000066
 17,Abu Dhabi Grand Prix,7,RAI,Alfa Romeo,15.0,97.555,12.0,0.0,+1 Lap,,,,,,,2.3090000000000117
-17,Abu Dhabi Grand Prix,77,BOT,Mercedes,2.0,95.271,2.0,18.0,Finished,,,,,,,0.025000000000005684
-17,Abu Dhabi Grand Prix,99,GIO,Alfa Romeo,14.0,97.075,16.0,0.0,+1 Lap,,,,,,,1.8290000000000077
+17,Abu Dhabi Grand Prix,77,BOT,Mercedes,2.0,95.271,2.0,18.0,Finished,,,,,,,0.0250000000000056
+17,Abu Dhabi Grand Prix,99,GIO,Alfa Romeo,14.0,97.075,16.0,0.0,+1 Lap,,,,,,,1.8290000000000075

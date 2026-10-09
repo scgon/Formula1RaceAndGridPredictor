@@ -23,7 +23,9 @@ NOTICE_KEY = f"{KIND}_reload_notice"
 st.title("Race Prediction")
 st.caption("Predicts the race finishing order. **Gain model**: positions gained vs grid. "
            "**Direct model**: absolute finish. **Baseline**: grid order. "
-           "Everything below uses only information available before the race starts.")
+           "Everything below uses only information available before the race starts. "
+           "Before qualifying runs there is no grid to anchor the gain model to, so the "
+           "direct model predicts alone in that window.")
 
 if VERSION_KEY not in st.session_state:
     st.session_state[VERSION_KEY] = 0
@@ -93,10 +95,17 @@ colors = wc.team_colors(used_year)
 
 # --- header ----------------------------------------------------------------
 headline = f"{used_year} {event_name} — round {target}"
-if mode == "pre":
+if mode in ("pre", "prequali"):
     st.subheader(f":material/rocket_launch: Prediction: {headline}")
-    st.caption("Pre-race mode. Grid estimated from the qualifying classification "
-               "(starting-grid penalties are not applied).")
+    if mode == "prequali":
+        st.caption("Pre-qualifying mode. Qualifying has not happened, so there is no grid "
+                   "yet: the gain model has nothing to anchor to and is skipped — the "
+                   "direct model predicts the finish order from practice, sprint and "
+                   "season-form features. The backtest below still scores both models on "
+                   "completed rounds.")
+    else:
+        st.caption("Pre-race mode. Grid estimated from the qualifying classification "
+                   "(starting-grid penalties are not applied).")
 else:
     st.subheader(f":material/history: Review: {headline}")
     st.caption("This round is already completed — models were trained only on earlier rounds, "
@@ -115,20 +124,27 @@ if mode == "post":
 else:
     ordered = gain.sort_values("pred_pos")
 
-disp = pd.DataFrame({
-    "Gain model": ordered["pred_pos"].astype(int),
-    "Direct model": ordered["direct_pos"].astype(int),
-    "Driver": ordered["driver"],
-    "Team": ordered["team"],
-    "Grid": ordered["grid"],
-}).reset_index(drop=True)
-
 error_fmt = lambda v: "" if pd.isna(v) else f"{int(v):+d}"
-fmt = {
-    "Gain model": "P{:.0f}",
-    "Direct model": "P{:.0f}",
-    "Grid": "P{:.0f}",
-}
+if mode == "prequali":
+    disp = pd.DataFrame({
+        "Direct model": ordered["pred_pos"].astype(int),
+        "Driver": ordered["driver"],
+        "Team": ordered["team"],
+    }).reset_index(drop=True)
+    fmt = {"Direct model": "P{:.0f}"}
+else:
+    disp = pd.DataFrame({
+        "Gain model": ordered["pred_pos"].astype(int),
+        "Direct model": ordered["direct_pos"].astype(int),
+        "Driver": ordered["driver"],
+        "Team": ordered["team"],
+        "Grid": ordered["grid"],
+    }).reset_index(drop=True)
+    fmt = {
+        "Gain model": "P{:.0f}",
+        "Direct model": "P{:.0f}",
+        "Grid": "P{:.0f}",
+    }
 if mode == "post":
     disp["Actual"] = ordered["finish"].to_numpy()
     disp["Error (gain)"] = (ordered["pred_pos"] - ordered["finish"]).to_numpy()
@@ -147,25 +163,35 @@ styled = styled.map(lambda t: wc.team_css(t, colors, bold=True), subset=["Driver
 styled = styled.map(lambda t: wc.team_css(t, colors), subset=["Team"])
 st.dataframe(styled, width="stretch", hide_index=True)
 
-p1, p2 = st.columns(2)
-p1.success(f"**Predicted podium (gain):** {' · '.join(gain.head(3)['driver'])}")
-p2.success(f"**Predicted podium (direct):** {' · '.join(gain.sort_values('direct_pos').head(3)['driver'])}")
+if mode == "prequali":
+    st.success(f"**Predicted podium (direct model):** {' · '.join(gain.head(3)['driver'])}")
+else:
+    p1, p2 = st.columns(2)
+    p1.success(f"**Predicted podium (gain):** {' · '.join(gain.head(3)['driver'])}")
+    p2.success(f"**Predicted podium (direct):** {' · '.join(gain.sort_values('direct_pos').head(3)['driver'])}")
 if mode == "post":
     actual_rows = features.loc[(features["round"] == target) & (features["finish"] <= 3)]
     actual_top3 = list(actual_rows.sort_values("finish")["driver"])
     st.info(f"**Actual podium:** {' · '.join(actual_top3)}", icon=":material/emoji_events:")
 
 # --- final predicted order diagram -----------------------------------------
-lanes = [("gain model", gain, "pred_pos"), ("direct model", gain, "direct_pos")]
-lanes.append(("actual result" if mode == "post" else "starting grid",
-              gain, "finish" if mode == "post" else "grid"))
+if mode == "prequali":
+    lanes = [("direct model", gain, "pred_pos")]
+    lane_caption = ("Driver codes sit at the direct model's predicted finishing slot; "
+                    "dashed lines mark the podium and points cuts. There is no starting "
+                    "grid yet — qualifying has not happened.")
+else:
+    lanes = [("gain model", gain, "pred_pos"), ("direct model", gain, "direct_pos")]
+    lanes.append(("actual result" if mode == "post" else "starting grid",
+                  gain, "finish" if mode == "post" else "grid"))
+    lane_caption = ("Driver codes sit at each model's predicted finishing slot "
+                    "(bottom lane = gain model, middle = direct model, "
+                    "top lane = actual result or starting grid); "
+                    "dashed lines mark the podium and points cuts.")
 chart = wc.predicted_order_chart(
     lanes, {3.5: "podium cut", 10.5: "points cut"}, colors, "finishing position")
 st.altair_chart(chart, theme="streamlit", width="stretch")
-st.caption("Driver codes sit at each model's predicted finishing slot "
-           "(bottom lane = gain model, middle = direct model, "
-           "top lane = actual result or starting grid); "
-           "dashed lines mark the podium and points cuts.")
+st.caption(lane_caption)
 
 # --- backtest --------------------------------------------------------------
 st.divider()
@@ -265,21 +291,27 @@ else:
 st.divider()
 st.subheader("Feature importance")
 st.caption("Permutation importance on the final training set — increase in MAE when a feature is shuffled.")
-ic1, ic2 = st.columns(2)
-with ic1:
-    st.markdown("**Gain model**")
-    st.bar_chart(imp_gain.set_index("feature")["importance"], horizontal=True,
-                 x_label="MAE increase", y_label="")
-with ic2:
+if mode == "prequali":
     st.markdown("**Direct model**")
     st.bar_chart(imp_direct.set_index("feature")["importance"], horizontal=True,
                  x_label="MAE increase", y_label="")
+else:
+    ic1, ic2 = st.columns(2)
+    with ic1:
+        st.markdown("**Gain model**")
+        st.bar_chart(imp_gain.set_index("feature")["importance"], horizontal=True,
+                     x_label="MAE increase", y_label="")
+    with ic2:
+        st.markdown("**Direct model**")
+        st.bar_chart(imp_direct.set_index("feature")["importance"], horizontal=True,
+                     x_label="MAE increase", y_label="")
 
 # --- diagnostics ------------------------------------------------------------
 st.divider()
 st.caption(f"Dataset: {features['round'].nunique()} rounds, {len(features)} driver-race records. "
            f"Features: {', '.join(predict_race.FEATURES)}")
-wc.tuned_params_expander(result, {"gain": "Gain", "direct": "Direct"})
+wc.tuned_params_expander(result, {"direct": "Direct"} if mode == "prequali"
+                         else {"gain": "Gain", "direct": "Direct"})
 wc.log_expander("Season data log", result["season_log"])
 if result["prep_log"].strip():
     wc.log_expander("Weekend download log", result["prep_log"])

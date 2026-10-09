@@ -1,9 +1,14 @@
 """Race finish prediction: gain model (finish - grid) vs direct model (absolute
-finish), baselined against grid order. Shared machinery lives in f1_common.py.
+finish), baselined against grid order. Runs in three modes: "post" reviews a
+completed round, "pre" predicts after qualifying (grid known, both models),
+and "prequali" predicts before qualifying — no grid exists yet, so the gain
+model has nothing to anchor to and the direct model predicts alone from
+practice, sprint and season-form features. Shared machinery lives in
+f1_common.py.
 """
 
 import argparse
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -12,6 +17,7 @@ import fastf1
 import f1_common as common
 
 MIN_TRAIN_ROUNDS = common.MIN_TRAIN_ROUNDS
+PRACTICE_BUFFER = timedelta(hours=2)
 
 PRACTICE_SESSIONS = ("FP1", "FP2", "FP3")
 
@@ -159,6 +165,50 @@ def load_upcoming_round(year, round_number, event_name):
     return _merge_weekend_features(frame, year, round_number)
 
 
+def practice_entrants(year, round_number, sessions=PRACTICE_SESSIONS):
+    for identifier in sessions:
+        try:
+            session = fastf1.get_session(year, round_number, identifier)
+            session.load(laps=False, telemetry=False, weather=False, messages=False)
+            if not session.results.empty:
+                return session.results
+        except Exception:
+            continue
+    return None
+
+
+def load_upcoming_round_prequali(year, round_number, event_name, fallback):
+    """Pre-quali frame: qualifying has not happened, so there are no quali
+    results yet. Entrants come from the first practice session with results,
+    or from the last completed round when no practice has run either. Grid
+    and quali features stay NaN — the direct model predicts from practice,
+    sprint and season-form features (the gain model needs a grid and is
+    skipped in this mode)."""
+    results = practice_entrants(year, round_number)
+    if results is not None:
+        entries = [(str(num), results.at[num, "Abbreviation"], results.at[num, "TeamName"])
+                   for num in results.index]
+    else:
+        entries = [(str(r.driver_number), r.driver, r.team) for r in fallback.itertuples()]
+    rows = []
+    for num, driver, team in entries:
+        rows.append({
+            "round": round_number,
+            "event": event_name,
+            "driver_number": num,
+            "driver": driver,
+            "team": team,
+            "grid": np.nan,
+            "quali_time": np.nan,
+            "finish": np.nan,
+            "points": 0.0,
+            "status": "",
+        })
+    frame = pd.DataFrame(rows, columns=RAW_COLUMNS)
+    frame["quali_delta"] = np.nan
+    return _merge_weekend_features(frame, year, round_number)
+
+
 def collect_season(year, schedule, refresh=False, rate_limit_wait=None):
     return common.collect_season(
         year, schedule,
@@ -239,7 +289,12 @@ def train_model(features, target_round, mode="gain", profile="fast"):
 
 def predict_round(model, features, target_round, mode="gain", use_features=None):
     use_features = FEATURES if use_features is None else use_features
-    rows = features[(features["round"] == target_round) & features["grid"].notna()].copy()
+    rows = features[features["round"] == target_round].copy()
+    # the gain model needs a grid to anchor to; the direct model predicts
+    # grid-less (pre-quali) rounds over all entrants, completed rounds
+    # (which always have a grid) exactly as before
+    if mode == "gain" or rows["grid"].notna().any():
+        rows = rows[rows["grid"].notna()]
     rows = rows.sort_values(["grid", "driver_number"])
     rows["model_output"] = model.predict(rows[use_features].to_numpy(dtype=float))
     if mode == "gain":
@@ -257,8 +312,11 @@ def podium_points(pred_top3, actual_top3):
                for p, a in zip(pred_top3, actual_top3))
 
 
-def backtest_records(features, min_train_rounds, profile="fast"):
-    """Rolling backtest of gain vs direct model; one metrics dict per predicted round.
+def backtest_records(features, min_train_rounds, profile="fast", models="both"):
+    """Rolling backtest of the selected models; one metrics dict per predicted
+    round. models picks what trains: "both" (default), "gain" or "direct" —
+    records then carry only the trained model's fields alongside the shared
+    baseline/actual fields.
 
     Alongside the CLI-reported metrics, each record carries the podium
     points, the predicted/actual winner names and the number of rounds each
@@ -271,106 +329,188 @@ def backtest_records(features, min_train_rounds, profile="fast"):
     for r in rounds:
         if sum(1 for x in rounds if x < r) < min_train_rounds:
             continue
+        # a pre-quali target round has no grid and no results: the gain
+        # model has nothing to anchor to and there is nothing to score
+        if features.loc[features["round"] == r, "grid"].notna().sum() == 0:
+            continue
         event = str(features.loc[features["round"] == r, "event"].iloc[0])
         try:
-            print(f"backtest round {r:>2}  {event}: training gain model{tune_note}...")
-            gain_model, gain_train, gain_used, _ = train_model(features, r, "gain", profile)
-            print(f"backtest round {r:>2}  {event}: training direct model{tune_note}...")
-            direct_model, direct_train, direct_used, _ = train_model(features, r, "direct", profile)
+            if models in ("both", "gain"):
+                common.vprint(1, f"backtest round {r:>2}  {event}: training gain model{tune_note}...")
+                gain_model, gain_train, gain_used, _ = train_model(features, r, "gain", profile)
+            if models in ("both", "direct"):
+                common.vprint(1, f"backtest round {r:>2}  {event}: training direct model{tune_note}...")
+                direct_model, direct_train, direct_used, _ = train_model(features, r, "direct", profile)
         except ValueError:
             continue
-        gain = predict_round(gain_model, features, r, "gain", gain_used)
-        direct = predict_round(direct_model, features, r, "direct", direct_used)
-        gain_scored = gain[gain["finish"].notna()]
-        direct_scored = direct[direct["finish"].notna()]
+        gain = direct = None
+        if models in ("both", "gain"):
+            gain = predict_round(gain_model, features, r, "gain", gain_used)
+        if models in ("both", "direct"):
+            direct = predict_round(direct_model, features, r, "direct", direct_used)
+        scored = (gain if gain is not None else direct)
+        scored = scored[scored["finish"].notna()]
         winner_row = features.loc[(features["round"] == r) & (features["finish"] == 1), "driver"]
-        if gain_scored.empty or winner_row.empty:
+        if scored.empty or winner_row.empty:
             continue
         winner = winner_row.iloc[0]
         actual_rows = features.loc[(features["round"] == r) & (features["finish"] <= 3)]
         actual_top3_order = list(actual_rows.sort_values("finish")["driver"])
         actual_top3 = set(actual_rows["driver"])
-        gain_top3 = list(gain.head(3)["driver"])
-        direct_top3 = list(direct.head(3)["driver"])
-        records.append({
-            "round": r,
-            "event": event,
-            "gain_mae": float((gain_scored["pred_pos"] - gain_scored["finish"]).abs().mean()),
-            "direct_mae": float((direct_scored["pred_pos"] - direct_scored["finish"]).abs().mean()),
-            "grid_mae": float((gain_scored["grid"].rank(method="first") - gain_scored["finish"]).abs().mean()),
-            "gain_podium": len(actual_top3 & set(gain_top3)),
-            "direct_podium": len(actual_top3 & set(direct_top3)),
-            "grid_podium": len(actual_top3 & set(gain_scored.nsmallest(3, "grid")["driver"])),
-            "gain_winner": 1 if gain_top3[0] == winner else 0,
-            "direct_winner": 1 if direct_top3[0] == winner else 0,
-            "grid_winner": 1 if gain_scored.nsmallest(1, "grid")["driver"].iloc[0] == winner else 0,
-            "gain_corr": common.rank_corr(gain_scored["pred_pos"], gain_scored["finish"]),
-            "direct_corr": common.rank_corr(direct_scored["pred_pos"], direct_scored["finish"]),
-            "gain_points": podium_points(gain_top3, actual_top3_order),
-            "direct_points": podium_points(direct_top3, actual_top3_order),
-            "gain_top1": gain_top3[0],
-            "direct_top1": direct_top3[0],
+        rec = {"round": r, "event": event}
+        if gain is not None:
+            gain_top3 = list(gain.head(3)["driver"])
+            rec.update({
+                "gain_mae": float((scored["pred_pos"] - scored["finish"]).abs().mean()),
+                "gain_podium": len(actual_top3 & set(gain_top3)),
+                "gain_winner": 1 if gain_top3[0] == winner else 0,
+                "gain_corr": common.rank_corr(scored["pred_pos"], scored["finish"]),
+                "gain_points": podium_points(gain_top3, actual_top3_order),
+                "gain_top1": gain_top3[0],
+                "gain_train_rounds": int(gain_train["round"].nunique()),
+            })
+        if direct is not None:
+            direct_top3 = list(direct.head(3)["driver"])
+            rec.update({
+                "direct_mae": float((direct[direct["finish"].notna()]["pred_pos"]
+                                     - direct[direct["finish"].notna()]["finish"]).abs().mean()),
+                "direct_podium": len(actual_top3 & set(direct_top3)),
+                "direct_winner": 1 if direct_top3[0] == winner else 0,
+                "direct_corr": common.rank_corr(direct[direct["finish"].notna()]["pred_pos"],
+                                                direct[direct["finish"].notna()]["finish"]),
+                "direct_points": podium_points(direct_top3, actual_top3_order),
+                "direct_top1": direct_top3[0],
+                "direct_train_rounds": int(direct_train["round"].nunique()),
+            })
+        rec.update({
+            "grid_mae": float((scored["grid"].rank(method="first") - scored["finish"]).abs().mean()),
+            "grid_podium": len(actual_top3 & set(scored.nsmallest(3, "grid")["driver"])),
+            "grid_winner": 1 if scored.nsmallest(1, "grid")["driver"].iloc[0] == winner else 0,
             "actual_top1": winner,
-            "gain_train_rounds": int(gain_train["round"].nunique()),
-            "direct_train_rounds": int(direct_train["round"].nunique()),
         })
+        records.append(rec)
+        detail = ""
+        if gain is not None:
+            detail += f"gain {rec['gain_mae']:.1f}"
+        if gain is not None and direct is not None:
+            detail += " / "
+        if direct is not None:
+            detail += f"direct {rec['direct_mae']:.1f}"
+        podium = "/".join(str(rec[k]) for k in
+                         ("gain_podium", "direct_podium") if k in rec)
+        winner_cells = "/".join("hit" if rec[k] else "-" for k in
+                                ("gain_winner", "direct_winner") if k in rec)
+        common.vprint(2, f"  round {r:>2} result: {detail} / grid {rec['grid_mae']:.1f} "
+                      f"| podium {podium} | winner {winner_cells}")
     return records
 
 
-def backtest_report(records):
-    print("\n=== Rolling backtest: gain model (finish - grid) vs direct model (absolute finish) ===")
-    print(f"{'rd':>3}  {'event':<26} {'gain':>5} {'direct':>6} {'grid':>5} {'podium':>8} {'winner':>8}")
-    for rec in records:
-        print(f"{rec['round']:>3}  {rec['event']:<26} {rec['gain_mae']:>5.1f} {rec['direct_mae']:>6.1f} "
-              f"{rec['grid_mae']:>5.1f} {f'{rec['gain_podium']}/{rec['direct_podium']}':>8} "
-              f"{('hit' if rec['gain_winner'] else '-') + '/' + ('hit' if rec['direct_winner'] else '-'):>8}")
+def backtest_report(records, models="both"):
+    show_gain = models in ("both", "gain")
+    show_direct = models in ("both", "direct")
+    if show_gain and show_direct:
+        print("\n=== Rolling backtest: gain model (finish - grid) vs direct model (absolute finish) ===")
+    else:
+        print(f"\n=== Rolling backtest: {models} model vs grid-order baseline ===")
+    if common.VERBOSITY >= 1:
+        header = f"{'rd':>3}  {'event':<26}"
+        if show_gain:
+            header += f" {'gain':>5}"
+        if show_direct:
+            header += f" {'direct':>6}"
+        header += f" {'grid':>5} {'podium':>8} {'winner':>8}"
+        print(header)
+        for rec in records:
+            line = f"{rec['round']:>3}  {rec['event']:<26}"
+            if show_gain:
+                line += f" {rec['gain_mae']:>5.1f}"
+            if show_direct:
+                line += f" {rec['direct_mae']:>6.1f}"
+            podium = "/".join(str(rec[k]) for k in ("gain_podium", "direct_podium") if k in rec)
+            winner = "/".join("hit" if rec[k] else "-" for k in
+                              ("gain_winner", "direct_winner") if k in rec)
+            line += f" {rec['grid_mae']:>5.1f} {podium:>8} {winner:>8}"
+            print(line)
     if not records:
         print("not enough completed rounds for a backtest yet")
         return
     n = len(records)
     print(f"\nMean over {n} predicted rounds:")
-    print(f"{'':<28} {'gain':>7} {'direct':>8} {'grid-only':>9}")
-    print(f"{'position MAE':<28}"
-          f"{np.mean([x['gain_mae'] for x in records]):>7.2f}"
-          f"{np.mean([x['direct_mae'] for x in records]):>8.2f}"
-          f"{np.mean([x['grid_mae'] for x in records]):>9.2f}")
-    print(f"{'podium hit rate':<28}"
-          f"{100 * sum(x['gain_podium'] for x in records) / (3 * n):>6.0f}%"
-          f"{100 * sum(x['direct_podium'] for x in records) / (3 * n):>7.0f}%"
-          f"{100 * sum(x['grid_podium'] for x in records) / (3 * n):>8.0f}%")
-    print(f"{'winner hit rate':<28}"
-          f"{100 * sum(x['gain_winner'] for x in records) / n:>6.0f}%"
-          f"{100 * sum(x['direct_winner'] for x in records) / n:>7.0f}%"
-          f"{100 * sum(x['grid_winner'] for x in records) / n:>8.0f}%")
-    print(f"{'rank correlation':<28}"
-          f"{np.nanmean([x['gain_corr'] for x in records]):>7.2f}"
-          f"{np.nanmean([x['direct_corr'] for x in records]):>8.2f}")
+    header = f"{'':<28}"
+    if show_gain:
+        header += f" {'gain':>7}"
+    if show_direct:
+        header += f" {'direct':>8}"
+    header += f" {'grid-only':>9}"
+    print(header)
+    line = f"{'position MAE':<28}"
+    if show_gain:
+        line += f"{np.mean([x['gain_mae'] for x in records]):>7.2f}"
+    if show_direct:
+        line += f"{np.mean([x['direct_mae'] for x in records]):>8.2f}"
+    line += f"{np.mean([x['grid_mae'] for x in records]):>9.2f}"
+    print(line)
+    line = f"{'podium hit rate':<28}"
+    if show_gain:
+        line += f"{100 * sum(x['gain_podium'] for x in records) / (3 * n):>6.0f}%"
+    if show_direct:
+        line += f"{100 * sum(x['direct_podium'] for x in records) / (3 * n):>7.0f}%"
+    line += f"{100 * sum(x['grid_podium'] for x in records) / (3 * n):>8.0f}%"
+    print(line)
+    line = f"{'winner hit rate':<28}"
+    if show_gain:
+        line += f"{100 * sum(x['gain_winner'] for x in records) / n:>6.0f}%"
+    if show_direct:
+        line += f"{100 * sum(x['direct_winner'] for x in records) / n:>7.0f}%"
+    line += f"{100 * sum(x['grid_winner'] for x in records) / n:>8.0f}%"
+    print(line)
+    line = f"{'rank correlation':<28}"
+    if show_gain:
+        line += f"{np.nanmean([x['gain_corr'] for x in records]):>7.2f}"
+    if show_direct:
+        line += f"{np.nanmean([x['direct_corr'] for x in records]):>8.2f}"
+    print(line)
 
 
-def final_predictions(features, target, profile="fast"):
-    """Train both models on rounds before `target` and predict `target`.
+def final_predictions(features, target, profile="fast", models="both"):
+    """Train the final models on rounds before `target` and predict `target`.
 
-    Returns models, the training set and both prediction frames; the gain
-    frame carries a direct_pos column for side-by-side display. The feature
-    lists actually used by each model (all-NaN training columns dropped)
-    are returned as gain_features / direct_features, and the hyperparameters
-    the profile selected as gain_params / direct_params (None = fixed fast
-    values, either because profile="fast" or because there was too little
-    data to tune on). Prints one live progress line per trained model
-    (streamed into the web app's download log).
+    Returns models, the training set and the prediction frames of the
+    selected models; with both models selected the gain frame carries a
+    direct_pos column for side-by-side display. The feature lists actually
+    used by each model (all-NaN training columns dropped) are returned as
+    gain_features / direct_features, and the hyperparameters the profile
+    selected as gain_params / direct_params (None = fixed fast values,
+    either because profile="fast" or because there was too little data to
+    tune on). models selects what trains: "both" (default), "gain" or
+    "direct" — the bundle contains only the selected models' keys (a
+    pre-quali target has no grid to anchor the gain model to, so callers
+    pass models="direct" there). Prints one live progress line per trained
+    model (streamed into the web app's download log).
     """
     tune_note = " (tuning hyperparameters)" if profile == "optimized" else ""
-    print(f"training final gain model{tune_note}...")
-    gain_model, train_set, gain_used, gain_params = train_model(features, target, "gain", profile)
-    print(f"training final direct model{tune_note}...")
-    direct_model, _, direct_used, direct_params = train_model(features, target, "direct", profile)
-    gain = predict_round(gain_model, features, target, "gain", gain_used)
-    direct = predict_round(direct_model, features, target, "direct", direct_used)
-    gain["direct_pos"] = gain["driver"].map(direct.set_index("driver")["pred_pos"]).astype(int)
-    return {"gain_model": gain_model, "direct_model": direct_model,
-            "train": train_set, "gain": gain, "direct": direct,
-            "gain_features": gain_used, "direct_features": direct_used,
-            "gain_params": gain_params, "direct_params": direct_params}
+    bundle = {}
+    if models in ("both", "gain"):
+        common.vprint(1, f"training final gain model{tune_note}...")
+        gain_model, train_set, gain_used, gain_params = train_model(features, target, "gain", profile)
+        gain = predict_round(gain_model, features, target, "gain", gain_used)
+        bundle.update({"gain_model": gain_model, "gain": gain,
+                       "gain_features": gain_used, "gain_params": gain_params,
+                       "train": train_set})
+    if models in ("both", "direct"):
+        common.vprint(1, f"training final direct model{tune_note}...")
+        direct_model, direct_train, direct_used, direct_params = train_model(features, target, "direct", profile)
+        direct = predict_round(direct_model, features, target, "direct", direct_used)
+        bundle.update({
+            "direct_model": direct_model,
+            "train": direct_train,
+            "direct": direct,
+            "direct_features": direct_used,
+            "direct_params": direct_params,
+        })
+        if models == "both":
+            gain["direct_pos"] = gain["driver"].map(direct.set_index("driver")["pred_pos"]).astype(int)
+    return bundle
 
 
 def importance_frame(pred, mode="gain"):
@@ -387,48 +527,98 @@ def importance_frame(pred, mode="gain"):
     return common.importance_scores(model, used, train[used].to_numpy(dtype=float), target)
 
 
-def final_report(features, year, target, event_name, mode, profile="fast"):
-    pred = final_predictions(features, target, profile)
-    gain = pred["gain"]
+def final_report(features, year, target, event_name, mode, profile="fast", models="both"):
+    if mode == "prequali" and models == "gain":
+        print("no grid yet, so the gain model cannot anchor to it - running the direct model only\n")
+    if mode == "prequali":
+        models = "direct"
+    pred = final_predictions(features, target, profile, models)
+    with_gain = "gain" in pred
+    with_direct = "direct" in pred
+    rows = pred["gain"] if with_gain else pred["direct"]
     print(f"\n=== Prediction: {year} {event_name} (round {target}) ===")
-    if mode == "pre":
+    if mode == "prequali":
+        print("pre-quali mode: qualifying has not happened yet, so there is no grid to\n"
+              "anchor the gain model to - the direct model predicts the race alone,\n"
+              "from practice, sprint and season-form features\n")
+    elif mode == "pre":
         print("grid estimated from qualifying classification (grid penalties not applied)\n")
-    header = f"{'gain':>4} {'direct':>6}  {'driver':<4} {'team':<20} {'grid':>4}"
+    if with_gain and with_direct:
+        header = f"{'gain':>4} {'direct':>6}  {'driver':<4} {'team':<20} {'grid':>4}"
+    elif with_gain:
+        header = f"{'gain':>4}  {'driver':<4} {'team':<20} {'grid':>4}"
+    else:
+        header = f"{'direct':>6}  {'driver':<4} {'team':<20}"
     if mode == "post":
         header += f" {'actual':>7} {'delta':>6}"
     print(header)
-    for _, row in gain.iterrows():
-        line = (f"{'P' + str(row['pred_pos']):>4} {'P' + str(row['direct_pos']):>6}  "
-                f"{row['driver']:<4} {row['team']:<20} {int(row['grid']):>4}")
+    for _, row in rows.iterrows():
+        if with_gain and with_direct:
+            line = (f"{'P' + str(row['pred_pos']):>4} {'P' + str(row['direct_pos']):>6}  "
+                    f"{row['driver']:<4} {row['team']:<20} {int(row['grid']):>4}")
+        elif with_gain:
+            line = (f"{'P' + str(row['pred_pos']):>4}  "
+                    f"{row['driver']:<4} {row['team']:<20} {int(row['grid']):>4}")
+        else:
+            line = (f"{'P' + str(row['pred_pos']):>6}  "
+                    f"{row['driver']:<4} {row['team']:<20}")
         if mode == "post":
             delta = int(row["pred_pos"] - row["finish"]) if pd.notna(row["finish"]) else ""
             actual = f"P{int(row['finish'])}" if pd.notna(row["finish"]) else "DNF"
             line += f" {actual:>7} {str(delta):>6}"
         print(line)
-    print(f"\nPredicted podium (gain model)   : {' '.join(gain.head(3)['driver'])}")
-    print(f"Predicted podium (direct model) : {' '.join(gain.sort_values('direct_pos').head(3)['driver'])}")
+    if with_gain:
+        print(f"\nPredicted podium (gain model)   : {' '.join(pred['gain'].head(3)['driver'])}")
+    if with_direct:
+        direct_podium = (pred['gain'].sort_values('direct_pos') if with_gain
+                         else pred['direct'])
+        lead = "" if with_gain else "\n"
+        print(f"{lead}Predicted podium (direct model) : "
+              f"{' '.join(direct_podium.head(3)['driver'])}")
     if mode == "post":
         actual_rows = features.loc[(features["round"] == target) & (features["finish"] <= 3)]
         actual_top3 = list(actual_rows.sort_values("finish")["driver"])
         print(f"Actual podium                   : {' '.join(actual_top3)}")
     else:
-        print(f"Predicted winner (gain model)   : {gain.iloc[0]['driver']}")
-        print(f"Predicted winner (direct model) : {gain.sort_values('direct_pos').iloc[0]['driver']}")
+        if with_gain:
+            print(f"Predicted winner (gain model)   : {pred['gain'].iloc[0]['driver']}")
+        if with_direct:
+            direct_order = (pred['gain'].sort_values('direct_pos') if with_gain
+                            else pred['direct'])
+            print(f"Predicted winner (direct model) : {direct_order.iloc[0]['driver']}")
     train = pred["train"]
     if profile == "optimized":
         untuned = "fast defaults (no clearly better combination found)"
-        print(f"\nTuned hyperparameters (gain model)   : "
-              f"{common.format_params(pred['gain_params']) or untuned}")
-        print(f"Tuned hyperparameters (direct model) : "
-              f"{common.format_params(pred['direct_params']) or untuned}")
-    common.importance_report(pred["gain_model"], pred["gain_features"],
-                             train[pred["gain_features"]].to_numpy(dtype=float),
-                             (train["finish"] - train["grid"]).to_numpy(dtype=float),
-                             "gain", width=22)
-    common.importance_report(pred["direct_model"], pred["direct_features"],
-                             train[pred["direct_features"]].to_numpy(dtype=float),
-                             train["finish"].to_numpy(dtype=float),
-                             "direct", width=22)
+        if with_gain:
+            print(f"\nTuned hyperparameters (gain model)   : "
+                  f"{common.format_params(pred['gain_params']) or untuned}")
+        if with_direct:
+            print(f"Tuned hyperparameters (direct model) : "
+                  f"{common.format_params(pred['direct_params']) or untuned}")
+    if with_gain and common.VERBOSITY >= 1:
+        common.importance_report(pred["gain_model"], pred["gain_features"],
+                                 train[pred["gain_features"]].to_numpy(dtype=float),
+                                 (train["finish"] - train["grid"]).to_numpy(dtype=float),
+                                 "gain", width=22)
+    if with_direct and common.VERBOSITY >= 1:
+        common.importance_report(pred["direct_model"], pred["direct_features"],
+                                 train[pred["direct_features"]].to_numpy(dtype=float),
+                                 train["finish"].to_numpy(dtype=float),
+                                 "direct", width=22)
+
+
+def practice_done_by(row, now):
+    for name in ("Practice 3", "Practice 2", "Practice 1"):
+        utc = session_utc(row, name)
+        if utc is not None and utc < now - PRACTICE_BUFFER:
+            return True
+    return False
+
+
+def _prequali_note(row, now):
+    if not practice_done_by(row, now):
+        print(f"\nNo practice sessions have finished yet, so the direct model relies on")
+        print("season form only - run again after practice (or qualifying) for sharper predictions")
 
 
 def resolve_target(args, year, schedule, data):
@@ -448,7 +638,8 @@ def resolve_target(args, year, schedule, data):
         row = upcoming[0]
         quali_utc = session_utc(row, "Qualifying")
         if quali_utc is None or quali_utc > now:
-            raise SystemExit(f"qualifying for the {row['EventName']} has not happened yet, retry after quali")
+            _prequali_note(row, now)
+            return int(row["RoundNumber"]), "prequali", str(row["EventName"])
         return int(row["RoundNumber"]), "pre", str(row["EventName"])
 
     if args.predict_round is not None:
@@ -465,7 +656,8 @@ def resolve_target(args, year, schedule, data):
             raise SystemExit(f"round {rn} happened recently but is not in the cache yet, retry in a few hours")
         if quali_utc is not None and quali_utc < now:
             return rn, "pre", str(row["EventName"])
-        raise SystemExit(f"cannot predict round {rn}: qualifying has not happened yet")
+        _prequali_note(row, now)
+        return rn, "prequali", str(row["EventName"])
 
     if upcoming:
         row = upcoming[0]
@@ -473,10 +665,10 @@ def resolve_target(args, year, schedule, data):
         if quali_utc is not None and quali_utc < now:
             print(f"\nNext round ({row['EventName']}) has qualifying done -> predicting that race")
             return int(row["RoundNumber"]), "pre", str(row["EventName"])
-        last_event = str(data.loc[data["round"] == completed[-1], "event"].iloc[0])
         print(f"\nQualifying for the next round ({row['EventName']}) has not happened yet,")
-        print(f"so the model demonstrates on the last completed race instead")
-        return completed[-1], "post", last_event
+        print(f"so the direct model predicts it without a grid (the gain model needs one)")
+        _prequali_note(row, now)
+        return int(row["RoundNumber"]), "prequali", str(row["EventName"])
 
     last_event = str(data.loc[data["round"] == completed[-1], "event"].iloc[0])
     print(f"\nThe {year} season is finished -> demonstrating on the final round")
@@ -491,16 +683,24 @@ def main():
     parser.add_argument("--predict-round", type=int, default=None,
                         help="round number to predict (default: auto-select)")
     parser.add_argument("--next", action="store_true",
-                        help="predict the next race on the calendar (requires qualifying to be done)")
+                        help="predict the next race on the calendar (after its qualifying "
+                             "with both models, before it with the direct model only)")
     parser.add_argument("--min-train-rounds", type=int, default=MIN_TRAIN_ROUNDS,
                         help="minimum completed rounds needed before first prediction (default: 5)")
     parser.add_argument("--model", choices=common.MODEL_PROFILES, default="fast",
                         help="model profile: 'fast' uses fixed hyperparameters, "
                              "'optimized' tunes them per model by minimizing "
                              "cross-validated MAE (better error, slower run)")
+    parser.add_argument("--models", choices=("both", "gain", "direct"), default="both",
+                        help="which models to train, backtest and predict: both "
+                             "(default), only the gain model, or only the direct model "
+                             "(a pre-quali target always falls back to direct-only — "
+                             "there is no grid to anchor the gain model to)")
     parser.add_argument("--refresh", action="store_true",
                         help="re-download season data, ignoring the local cache")
+    common.add_verbosity_args(parser)
     args = parser.parse_args()
+    common.apply_verbosity(args)
 
     setup()
     year = args.season or datetime.now().year
@@ -515,7 +715,12 @@ def main():
             raise SystemExit("no race data available")
 
     target, mode, event_name = resolve_target(args, year, schedule, data)
-    if mode == "pre":
+    if mode == "prequali":
+        completed_rounds = sorted(data["round"].unique())
+        fallback = data[data["round"] == completed_rounds[-1]]
+        upcoming = load_upcoming_round_prequali(year, target, event_name, fallback)
+        data = pd.concat([data[data["round"] != target], upcoming], ignore_index=True)
+    elif mode == "pre":
         upcoming = load_upcoming_round(year, target, event_name)
         data = pd.concat([data[data["round"] != target], upcoming], ignore_index=True)
 
@@ -524,8 +729,9 @@ def main():
     print(f"\nDataset: {n_rounds} rounds, {len(features)} driver-race records")
     print(f"Features: {', '.join(FEATURES)}")
 
-    backtest_report(backtest_records(features, args.min_train_rounds, args.model))
-    final_report(features, year, target, event_name, mode, args.model)
+    backtest_report(backtest_records(features, args.min_train_rounds, args.model, args.models),
+                    args.models)
+    final_report(features, year, target, event_name, mode, args.model, args.models)
 
 
 if __name__ == "__main__":

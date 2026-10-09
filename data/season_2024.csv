@@ -278,14 +278,14 @@ round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_ra
 14,Belgian Grand Prix,63,RUS,Mercedes,6.0,114.095,20.0,0.0,Disqualified,,,,,,,0.9359999999999928
 14,Belgian Grand Prix,77,BOT,Sauber,14.0,114.764,15.0,0.0,Finished,,,,,,,1.6049999999999898
 14,Belgian Grand Prix,81,PIA,McLaren,5.0,114.027,2.0,18.0,Finished,,,,,,,0.867999999999995
-15,Dutch Grand Prix,1,VER,Red Bull,2.0,70.029,2.0,18.0,Finished,,,,,,,0.35599999999999454
+15,Dutch Grand Prix,1,VER,Red Bull,2.0,70.029,2.0,18.0,Finished,,,,,,,0.3559999999999945
 15,Dutch Grand Prix,10,GAS,Alpine F1 Team,9.0,70.815,9.0,2.0,Lapped,,,,,,,1.141999999999996
 15,Dutch Grand Prix,11,PER,Red Bull,5.0,70.416,6.0,8.0,Finished,,,,,,,0.742999999999995
-15,Dutch Grand Prix,14,ALO,Aston Martin,7.0,70.633,10.0,1.0,Lapped,,,,,,,0.9599999999999937
+15,Dutch Grand Prix,14,ALO,Aston Martin,7.0,70.633,10.0,1.0,Lapped,,,,,,,0.9599999999999936
 15,Dutch Grand Prix,16,LEC,Ferrari,6.0,70.582,3.0,15.0,Finished,,,,,,,0.9089999999999918
 15,Dutch Grand Prix,18,STR,Aston Martin,8.0,70.661,13.0,0.0,Lapped,,,,,,,0.9879999999999995
 15,Dutch Grand Prix,2,SAR,Williams,18.0,,16.0,0.0,Lapped,,,,,,,
-15,Dutch Grand Prix,20,MAG,Haas F1 Team,20.0,71.295,18.0,0.0,Lapped,,,,,,,1.6219999999999999
+15,Dutch Grand Prix,20,MAG,Haas F1 Team,20.0,71.295,18.0,0.0,Lapped,,,,,,,1.622
 15,Dutch Grand Prix,22,TSU,RB F1 Team,11.0,70.955,17.0,0.0,Lapped,,,,,,,1.2819999999999965
 15,Dutch Grand Prix,23,ALB,Williams,19.0,70.653,14.0,0.0,Lapped,,,,,,,0.980000000000004
 15,Dutch Grand Prix,24,ZHO,Sauber,17.0,73.261,20.0,0.0,Lapped,,,,,,,3.587999999999994
@@ -293,16 +293,16 @@ round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_ra
 15,Dutch Grand Prix,3,RIC,RB F1 Team,13.0,71.943,12.0,0.0,Lapped,,,,,,,2.269999999999996
 15,Dutch Grand Prix,31,OCO,Alpine F1 Team,15.0,71.995,15.0,0.0,Lapped,,,,,,,2.3220000000000027
 15,Dutch Grand Prix,4,NOR,McLaren,1.0,69.673,1.0,26.0,Finished,,,,,,,0.0
-15,Dutch Grand Prix,44,HAM,Mercedes,14.0,70.948,8.0,4.0,Finished,,,,,,,1.2749999999999915
+15,Dutch Grand Prix,44,HAM,Mercedes,14.0,70.948,8.0,4.0,Finished,,,,,,,1.2749999999999917
 15,Dutch Grand Prix,55,SAI,Ferrari,10.0,70.914,5.0,10.0,Finished,,,,,,,1.2409999999999997
 15,Dutch Grand Prix,63,RUS,Mercedes,4.0,70.244,7.0,6.0,Finished,,,,,,,0.570999999999998
 15,Dutch Grand Prix,77,BOT,Sauber,16.0,72.168,19.0,0.0,Lapped,,,,,,,2.4950000000000045
 15,Dutch Grand Prix,81,PIA,McLaren,3.0,70.172,4.0,12.0,Finished,,,,,,,0.4989999999999952
-16,Italian Grand Prix,1,VER,Red Bull,7.0,79.662,6.0,8.0,Finished,,,,,,,0.33500000000000796
+16,Italian Grand Prix,1,VER,Red Bull,7.0,79.662,6.0,8.0,Finished,,,,,,,0.3350000000000079
 16,Italian Grand Prix,10,GAS,Alpine F1 Team,14.0,80.738,15.0,0.0,Lapped,,,,,,,1.4110000000000014
 16,Italian Grand Prix,11,PER,Red Bull,8.0,80.062,8.0,4.0,Finished,,,,,,,0.7349999999999994
 16,Italian Grand Prix,14,ALO,Aston Martin,11.0,80.421,11.0,0.0,Finished,,,,,,,1.0940000000000083
-16,Italian Grand Prix,16,LEC,Ferrari,4.0,79.461,1.0,25.0,Finished,,,,,,,0.13400000000000034
+16,Italian Grand Prix,16,LEC,Ferrari,4.0,79.461,1.0,25.0,Finished,,,,,,,0.1340000000000003
 16,Italian Grand Prix,18,STR,Aston Martin,17.0,81.013,19.0,0.0,Lapped,,,,,,,1.686000000000007
 16,Italian Grand Prix,20,MAG,Haas F1 Team,13.0,80.698,10.0,1.0,Finished,,,,,,,1.3709999999999951
 16,Italian Grand Prix,22,TSU,RB F1 Team,16.0,80.945,20.0,0.0,Retired,,,,,,,1.617999999999995
@@ -313,11 +313,11 @@ round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_ra
 16,Italian Grand Prix,31,OCO,Alpine F1 Team,15.0,80.764,14.0,0.0,Lapped,,,,,,,1.4369999999999976
 16,Italian Grand Prix,4,NOR,McLaren,1.0,79.327,3.0,16.0,Finished,,,,,,,0.0
 16,Italian Grand Prix,43,COL,Williams,18.0,81.061,12.0,0.0,Finished,,,,,,,1.7340000000000089
-16,Italian Grand Prix,44,HAM,Mercedes,6.0,79.513,5.0,10.0,Finished,,,,,,,0.18600000000000705
-16,Italian Grand Prix,55,SAI,Ferrari,5.0,79.467,4.0,12.0,Finished,,,,,,,0.14000000000000057
-16,Italian Grand Prix,63,RUS,Mercedes,3.0,79.44,7.0,6.0,Finished,,,,,,,0.11299999999999955
+16,Italian Grand Prix,44,HAM,Mercedes,6.0,79.513,5.0,10.0,Finished,,,,,,,0.186000000000007
+16,Italian Grand Prix,55,SAI,Ferrari,5.0,79.467,4.0,12.0,Finished,,,,,,,0.1400000000000005
+16,Italian Grand Prix,63,RUS,Mercedes,3.0,79.44,7.0,6.0,Finished,,,,,,,0.1129999999999995
 16,Italian Grand Prix,77,BOT,Sauber,19.0,81.101,16.0,0.0,Lapped,,,,,,,1.774000000000001
-16,Italian Grand Prix,81,PIA,McLaren,2.0,79.436,2.0,18.0,Finished,,,,,,,0.10900000000000887
+16,Italian Grand Prix,81,PIA,McLaren,2.0,79.436,2.0,18.0,Finished,,,,,,,0.1090000000000088
 17,Azerbaijan Grand Prix,1,VER,Red Bull,6.0,102.023,5.0,10.0,Finished,,,,,,,0.6580000000000013
 17,Azerbaijan Grand Prix,10,GAS,Alpine F1 Team,18.0,103.179,12.0,0.0,Finished,,,,,,,1.8140000000000072
 17,Azerbaijan Grand Prix,11,PER,Red Bull,4.0,101.813,17.0,0.0,Retired,,,,,,,0.4480000000000075
@@ -325,73 +325,73 @@ round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_ra
 17,Azerbaijan Grand Prix,16,LEC,Ferrari,1.0,101.365,2.0,18.0,Finished,,,,,,,0.0
 17,Azerbaijan Grand Prix,18,STR,Aston Martin,13.0,103.37,19.0,0.0,Retired,,,,,,,2.0050000000000097
 17,Azerbaijan Grand Prix,22,TSU,RB F1 Team,11.0,103.035,20.0,0.0,Retired,,,,,,,1.6700000000000017
-17,Azerbaijan Grand Prix,23,ALB,Williams,9.0,102.84,7.0,6.0,Finished,,,,,,,1.4750000000000085
-17,Azerbaijan Grand Prix,24,ZHO,Sauber,17.0,104.246,14.0,0.0,Finished,,,,,,,2.8810000000000002
+17,Azerbaijan Grand Prix,23,ALB,Williams,9.0,102.84,7.0,6.0,Finished,,,,,,,1.4750000000000083
+17,Azerbaijan Grand Prix,24,ZHO,Sauber,17.0,104.246,14.0,0.0,Finished,,,,,,,2.881
 17,Azerbaijan Grand Prix,27,HUL,Haas F1 Team,12.0,103.101,11.0,0.0,Finished,,,,,,,1.7360000000000042
 17,Azerbaijan Grand Prix,3,RIC,RB F1 Team,14.0,103.547,13.0,0.0,Finished,,,,,,,2.182000000000002
 17,Azerbaijan Grand Prix,31,OCO,Alpine F1 Team,20.0,104.504,15.0,0.0,Lapped,,,,,,,3.13900000000001
-17,Azerbaijan Grand Prix,4,NOR,McLaren,15.0,103.609,4.0,13.0,Finished,,,,,,,2.2439999999999998
+17,Azerbaijan Grand Prix,4,NOR,McLaren,15.0,103.609,4.0,13.0,Finished,,,,,,,2.244
 17,Azerbaijan Grand Prix,43,COL,Williams,8.0,102.473,8.0,4.0,Finished,,,,,,,1.108000000000004
 17,Azerbaijan Grand Prix,44,HAM,Mercedes,19.0,102.289,9.0,2.0,Finished,,,,,,,0.9240000000000066
 17,Azerbaijan Grand Prix,50,BEA,Haas F1 Team,10.0,102.968,10.0,1.0,Finished,,,,,,,1.6030000000000086
-17,Azerbaijan Grand Prix,55,SAI,Ferrari,3.0,101.805,18.0,0.0,Retired,,,,,,,0.44000000000001194
+17,Azerbaijan Grand Prix,55,SAI,Ferrari,3.0,101.805,18.0,0.0,Retired,,,,,,,0.4400000000000119
 17,Azerbaijan Grand Prix,63,RUS,Mercedes,5.0,101.874,3.0,15.0,Finished,,,,,,,0.5090000000000003
 17,Azerbaijan Grand Prix,77,BOT,Sauber,16.0,103.618,16.0,0.0,Lapped,,,,,,,2.253
-17,Azerbaijan Grand Prix,81,PIA,McLaren,2.0,101.686,1.0,25.0,Finished,,,,,,,0.32100000000001216
-18,Singapore Grand Prix,1,VER,Red Bull,2.0,89.68,2.0,18.0,Finished,,,,,,,0.15500000000000114
+17,Azerbaijan Grand Prix,81,PIA,McLaren,2.0,101.686,1.0,25.0,Finished,,,,,,,0.3210000000000121
+18,Singapore Grand Prix,1,VER,Red Bull,2.0,89.68,2.0,18.0,Finished,,,,,,,0.1550000000000011
 18,Singapore Grand Prix,10,GAS,Alpine F1 Team,18.0,91.312,17.0,0.0,Lapped,,,,,,,1.786999999999992
 18,Singapore Grand Prix,11,PER,Red Bull,13.0,90.579,10.0,1.0,Lapped,,,,,,,1.0539999999999878
 18,Singapore Grand Prix,14,ALO,Aston Martin,7.0,90.214,8.0,4.0,Lapped,,,,,,,0.688999999999993
 18,Singapore Grand Prix,16,LEC,Ferrari,9.0,89.747,5.0,10.0,Finished,,,,,,,0.2219999999999942
 18,Singapore Grand Prix,18,STR,Aston Martin,17.0,91.094,14.0,0.0,Lapped,,,,,,,1.5689999999999884
-18,Singapore Grand Prix,20,MAG,Haas F1 Team,14.0,90.653,19.0,0.0,Retired,,,,,,,1.1280000000000001
+18,Singapore Grand Prix,20,MAG,Haas F1 Team,14.0,90.653,19.0,0.0,Retired,,,,,,,1.128
 18,Singapore Grand Prix,22,TSU,RB F1 Team,8.0,90.289,12.0,0.0,Lapped,,,,,,,0.7639999999999958
-18,Singapore Grand Prix,23,ALB,Williams,11.0,90.474,20.0,0.0,Retired,,,,,,,0.9489999999999981
+18,Singapore Grand Prix,23,ALB,Williams,11.0,90.474,20.0,0.0,Retired,,,,,,,0.948999999999998
 18,Singapore Grand Prix,24,ZHO,Sauber,20.0,92.054,15.0,0.0,Lapped,,,,,,,2.5289999999999964
 18,Singapore Grand Prix,27,HUL,Haas F1 Team,6.0,90.115,9.0,2.0,Lapped,,,,,,,0.5899999999999892
 18,Singapore Grand Prix,3,RIC,RB F1 Team,16.0,91.085,18.0,0.0,Lapped,,,,,,,1.559999999999988
 18,Singapore Grand Prix,31,OCO,Alpine F1 Team,15.0,90.769,13.0,0.0,Lapped,,,,,,,1.2439999999999998
 18,Singapore Grand Prix,4,NOR,McLaren,1.0,89.525,1.0,25.0,Finished,,,,,,,0.0
-18,Singapore Grand Prix,43,COL,Williams,12.0,90.481,11.0,0.0,Lapped,,,,,,,0.9559999999999889
+18,Singapore Grand Prix,43,COL,Williams,12.0,90.481,11.0,0.0,Lapped,,,,,,,0.9559999999999887
 18,Singapore Grand Prix,44,HAM,Mercedes,3.0,89.841,6.0,8.0,Finished,,,,,,,0.3159999999999883
 18,Singapore Grand Prix,55,SAI,Ferrari,10.0,90.108,7.0,6.0,Finished,,,,,,,0.5829999999999984
-18,Singapore Grand Prix,63,RUS,Mercedes,4.0,89.867,4.0,12.0,Finished,,,,,,,0.34199999999999875
+18,Singapore Grand Prix,63,RUS,Mercedes,4.0,89.867,4.0,12.0,Finished,,,,,,,0.3419999999999987
 18,Singapore Grand Prix,77,BOT,Sauber,19.0,91.572,16.0,0.0,Lapped,,,,,,,2.046999999999997
-18,Singapore Grand Prix,81,PIA,McLaren,5.0,89.64,3.0,15.0,Finished,,,,,,,0.11499999999999488
-19,United States Grand Prix,1,VER,Red Bull,2.0,92.361,3.0,15.0,Finished,,,,1.0,1.0,0.0,0.03100000000000591
+18,Singapore Grand Prix,81,PIA,McLaren,5.0,89.64,3.0,15.0,Finished,,,,,,,0.1149999999999948
+19,United States Grand Prix,1,VER,Red Bull,2.0,92.361,3.0,15.0,Finished,,,,1.0,1.0,0.0,0.0310000000000059
 19,United States Grand Prix,10,GAS,Alpine F1 Team,6.0,93.018,12.0,0.0,Finished,,,,12.0,14.0,-2.0,0.6880000000000024
 19,United States Grand Prix,11,PER,Red Bull,9.0,93.02,7.0,6.0,Finished,,,,11.0,9.0,2.0,0.6899999999999977
 19,United States Grand Prix,14,ALO,Aston Martin,7.0,93.309,13.0,0.0,Lapped,,,,14.0,18.0,-4.0,0.9789999999999992
 19,United States Grand Prix,16,LEC,Ferrari,4.0,92.74,1.0,25.0,Finished,,,,3.0,4.0,-1.0,0.4099999999999966
 19,United States Grand Prix,18,STR,Aston Martin,13.0,93.759,15.0,0.0,Lapped,,,,13.0,13.0,0.0,1.429000000000002
-19,United States Grand Prix,20,MAG,Haas F1 Team,8.0,93.474,11.0,0.0,Finished,,,,8.0,7.0,1.0,1.1440000000000055
+19,United States Grand Prix,20,MAG,Haas F1 Team,8.0,93.474,11.0,0.0,Finished,,,,8.0,7.0,1.0,1.1440000000000057
 19,United States Grand Prix,22,TSU,RB F1 Team,10.0,93.506,14.0,0.0,Lapped,,,,9.0,11.0,-2.0,1.176000000000002
 19,United States Grand Prix,23,ALB,Williams,14.0,94.051,16.0,0.0,Lapped,,,,20.0,17.0,3.0,1.7210000000000036
-19,United States Grand Prix,24,ZHO,Sauber,18.0,94.228,19.0,0.0,Lapped,,,,19.0,19.0,0.0,1.8979999999999961
+19,United States Grand Prix,24,ZHO,Sauber,18.0,94.228,19.0,0.0,Lapped,,,,19.0,19.0,0.0,1.897999999999996
 19,United States Grand Prix,27,HUL,Haas F1 Team,11.0,93.544,8.0,4.0,Finished,,,,6.0,8.0,-2.0,1.2139999999999986
 19,United States Grand Prix,30,LAW,RB F1 Team,19.0,93.339,9.0,2.0,Finished,,,,15.0,16.0,-1.0,1.0090000000000003
 19,United States Grand Prix,31,OCO,Alpine F1 Team,12.0,93.597,18.0,0.0,Lapped,,,,17.0,15.0,2.0,1.266999999999996
 19,United States Grand Prix,4,NOR,McLaren,1.0,92.33,4.0,12.0,Finished,,,,4.0,3.0,1.0,0.0
-19,United States Grand Prix,43,COL,Williams,15.0,94.062,10.0,1.0,Finished,,,,10.0,12.0,-2.0,1.7319999999999993
+19,United States Grand Prix,43,COL,Williams,15.0,94.062,10.0,1.0,Finished,,,,10.0,12.0,-2.0,1.731999999999999
 19,United States Grand Prix,44,HAM,Mercedes,17.0,94.154,20.0,0.0,Retired,,,,7.0,6.0,1.0,1.823999999999998
-19,United States Grand Prix,55,SAI,Ferrari,3.0,92.652,2.0,18.0,Finished,,,,5.0,2.0,3.0,0.32200000000000273
+19,United States Grand Prix,55,SAI,Ferrari,3.0,92.652,2.0,18.0,Finished,,,,5.0,2.0,3.0,0.3220000000000027
 19,United States Grand Prix,63,RUS,Mercedes,20.0,92.974,6.0,8.0,Finished,,,,2.0,5.0,-3.0,0.6440000000000055
 19,United States Grand Prix,77,BOT,Sauber,16.0,94.152,17.0,0.0,Lapped,,,,18.0,20.0,-2.0,1.8220000000000027
 19,United States Grand Prix,81,PIA,McLaren,5.0,92.95,5.0,10.0,Finished,,,,16.0,10.0,6.0,0.6200000000000045
-20,Mexico City Grand Prix,1,VER,Red Bull,2.0,76.171,6.0,8.0,Finished,,,,,,,0.22500000000000853
+20,Mexico City Grand Prix,1,VER,Red Bull,2.0,76.171,6.0,8.0,Finished,,,,,,,0.2250000000000085
 20,Mexico City Grand Prix,10,GAS,Alpine F1 Team,8.0,76.892,10.0,1.0,Lapped,,,,,,,0.945999999999998
-20,Mexico City Grand Prix,11,PER,Red Bull,18.0,77.611,17.0,0.0,Lapped,,,,,,,1.6650000000000063
+20,Mexico City Grand Prix,11,PER,Red Bull,18.0,77.611,17.0,0.0,Lapped,,,,,,,1.6650000000000065
 20,Mexico City Grand Prix,14,ALO,Aston Martin,13.0,77.168,18.0,0.0,Retired,,,,,,,1.2220000000000084
 20,Mexico City Grand Prix,16,LEC,Ferrari,4.0,76.265,3.0,16.0,Finished,,,,,,,0.3190000000000026
 20,Mexico City Grand Prix,18,STR,Aston Martin,14.0,77.294,11.0,0.0,Lapped,,,,,,,1.347999999999999
-20,Mexico City Grand Prix,20,MAG,Haas F1 Team,7.0,76.886,7.0,6.0,Finished,,,,,,,0.9399999999999977
+20,Mexico City Grand Prix,20,MAG,Haas F1 Team,7.0,76.886,7.0,6.0,Finished,,,,,,,0.9399999999999976
 20,Mexico City Grand Prix,22,TSU,RB F1 Team,11.0,77.129,20.0,0.0,Retired,,,,,,,1.183000000000007
 20,Mexico City Grand Prix,23,ALB,Williams,9.0,76.988,19.0,0.0,Retired,,,,,,,1.0420000000000016
 20,Mexico City Grand Prix,24,ZHO,Sauber,19.0,78.072,15.0,0.0,Lapped,,,,,,,2.1260000000000048
 20,Mexico City Grand Prix,27,HUL,Haas F1 Team,10.0,76.995,9.0,2.0,Lapped,,,,,,,1.0490000000000066
 20,Mexico City Grand Prix,30,LAW,RB F1 Team,12.0,77.162,16.0,0.0,Lapped,,,,,,,1.2160000000000082
 20,Mexico City Grand Prix,31,OCO,Alpine F1 Team,,77.617,13.0,0.0,Lapped,,,,,,,1.6710000000000065
-20,Mexico City Grand Prix,4,NOR,McLaren,3.0,76.26,2.0,18.0,Finished,,,,,,,0.31400000000000716
+20,Mexico City Grand Prix,4,NOR,McLaren,3.0,76.26,2.0,18.0,Finished,,,,,,,0.3140000000000071
 20,Mexico City Grand Prix,43,COL,Williams,16.0,77.558,12.0,0.0,Lapped,,,,,,,1.612000000000009
 20,Mexico City Grand Prix,44,HAM,Mercedes,6.0,76.651,4.0,12.0,Finished,,,,,,,0.7049999999999983
 20,Mexico City Grand Prix,55,SAI,Ferrari,1.0,75.946,1.0,25.0,Finished,,,,,,,0.0
@@ -402,10 +402,10 @@ round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_ra
 21,São Paulo Grand Prix,10,GAS,Alpine F1 Team,13.0,89.42,3.0,15.0,Finished,,,,7.0,7.0,0.0,6.015000000000001
 21,São Paulo Grand Prix,11,PER,Red Bull,12.0,88.158,11.0,0.0,Finished,,,,13.0,8.0,5.0,4.753
 21,São Paulo Grand Prix,14,ALO,Aston Martin,9.0,88.998,14.0,0.0,Finished,,,,18.0,18.0,0.0,5.5930000000000035
-21,São Paulo Grand Prix,16,LEC,Ferrari,6.0,84.525,5.0,10.0,Finished,,,,3.0,3.0,0.0,1.1200000000000045
+21,São Paulo Grand Prix,16,LEC,Ferrari,6.0,84.525,5.0,10.0,Finished,,,,3.0,3.0,0.0,1.1200000000000043
 21,São Paulo Grand Prix,18,STR,Aston Martin,10.0,86.334,19.0,0.0,Did not start,,,,19.0,19.0,0.0,2.929000000000002
 21,São Paulo Grand Prix,22,TSU,RB F1 Team,3.0,84.111,7.0,6.0,Finished,,,,17.0,15.0,2.0,0.7060000000000031
-21,São Paulo Grand Prix,23,ALB,Williams,7.0,84.657,18.0,0.0,Did not start,,,,9.0,10.0,-1.0,1.2519999999999953
+21,São Paulo Grand Prix,23,ALB,Williams,7.0,84.657,18.0,0.0,Did not start,,,,9.0,10.0,-1.0,1.2519999999999951
 21,São Paulo Grand Prix,24,ZHO,Sauber,19.0,92.263,15.0,0.0,Finished,,,,20.0,17.0,3.0,8.858000000000004
 21,São Paulo Grand Prix,27,HUL,Haas F1 Team,18.0,91.623,20.0,0.0,Disqualified,,,,12.0,20.0,-8.0,8.218000000000004
 21,São Paulo Grand Prix,30,LAW,RB F1 Team,5.0,84.484,9.0,2.0,Finished,,,,8.0,9.0,-1.0,1.0789999999999935
@@ -415,14 +415,14 @@ round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_ra
 21,São Paulo Grand Prix,44,HAM,Mercedes,14.0,91.15,10.0,1.0,Finished,,,,11.0,11.0,0.0,7.7450000000000045
 21,São Paulo Grand Prix,50,BEA,Haas F1 Team,15.0,91.229,12.0,0.0,Finished,,,,10.0,14.0,-4.0,7.823999999999998
 21,São Paulo Grand Prix,55,SAI,Ferrari,20.0,89.406,16.0,0.0,Retired,,,,5.0,5.0,0.0,6.001000000000005
-21,São Paulo Grand Prix,63,RUS,Mercedes,2.0,83.578,4.0,12.0,Finished,,,,6.0,6.0,0.0,0.17300000000000182
+21,São Paulo Grand Prix,63,RUS,Mercedes,2.0,83.578,4.0,12.0,Finished,,,,6.0,6.0,0.0,0.1730000000000018
 21,São Paulo Grand Prix,77,BOT,Sauber,11.0,86.472,13.0,0.0,Finished,,,,15.0,16.0,-1.0,3.066999999999993
 21,São Paulo Grand Prix,81,PIA,McLaren,8.0,84.686,8.0,4.0,Finished,,,,1.0,2.0,-1.0,1.281000000000006
-22,Las Vegas Grand Prix,1,VER,Red Bull,5.0,92.797,5.0,10.0,Finished,,,,,,,0.48499999999999943
-22,Las Vegas Grand Prix,10,GAS,Alpine F1 Team,3.0,92.664,20.0,0.0,Retired,,,,,,,0.35200000000000387
+22,Las Vegas Grand Prix,1,VER,Red Bull,5.0,92.797,5.0,10.0,Finished,,,,,,,0.4849999999999994
+22,Las Vegas Grand Prix,10,GAS,Alpine F1 Team,3.0,92.664,20.0,0.0,Retired,,,,,,,0.3520000000000038
 22,Las Vegas Grand Prix,11,PER,Red Bull,15.0,94.155,10.0,1.0,Finished,,,,,,,1.8430000000000035
 22,Las Vegas Grand Prix,14,ALO,Aston Martin,16.0,94.258,11.0,0.0,Finished,,,,,,,1.945999999999998
-22,Las Vegas Grand Prix,16,LEC,Ferrari,4.0,92.783,4.0,12.0,Finished,,,,,,,0.47100000000000364
+22,Las Vegas Grand Prix,16,LEC,Ferrari,4.0,92.783,4.0,12.0,Finished,,,,,,,0.4710000000000036
 22,Las Vegas Grand Prix,18,STR,Aston Martin,18.0,94.484,15.0,0.0,Finished,,,,,,,2.171999999999997
 22,Las Vegas Grand Prix,20,MAG,Haas F1 Team,12.0,93.297,12.0,0.0,Finished,,,,,,,0.9849999999999994
 22,Las Vegas Grand Prix,22,TSU,RB F1 Team,7.0,93.029,9.0,2.0,Finished,,,,,,,0.7169999999999987
@@ -433,30 +433,30 @@ round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_ra
 22,Las Vegas Grand Prix,31,OCO,Alpine F1 Team,11.0,93.221,17.0,0.0,Lapped,,,,,,,0.909000000000006
 22,Las Vegas Grand Prix,4,NOR,McLaren,6.0,93.008,6.0,9.0,Finished,,,,,,,0.695999999999998
 22,Las Vegas Grand Prix,43,COL,Williams,20.0,93.746,14.0,0.0,Finished,,,,,,,1.4339999999999975
-22,Las Vegas Grand Prix,44,HAM,Mercedes,10.0,92.567,2.0,18.0,Finished,,,,,,,0.25499999999999545
-22,Las Vegas Grand Prix,55,SAI,Ferrari,2.0,92.41,3.0,15.0,Finished,,,,,,,0.09799999999999898
+22,Las Vegas Grand Prix,44,HAM,Mercedes,10.0,92.567,2.0,18.0,Finished,,,,,,,0.2549999999999954
+22,Las Vegas Grand Prix,55,SAI,Ferrari,2.0,92.41,3.0,15.0,Finished,,,,,,,0.0979999999999989
 22,Las Vegas Grand Prix,63,RUS,Mercedes,1.0,92.312,1.0,25.0,Finished,,,,,,,0.0
 22,Las Vegas Grand Prix,77,BOT,Sauber,19.0,94.43,18.0,0.0,Lapped,,,,,,,2.118000000000009
 22,Las Vegas Grand Prix,81,PIA,McLaren,8.0,93.024,7.0,6.0,Finished,,,,,,,0.7120000000000033
 23,Qatar Grand Prix,1,VER,Red Bull,2.0,80.52,1.0,25.0,Finished,,,,6.0,8.0,-2.0,0.0
 23,Qatar Grand Prix,10,GAS,Alpine F1 Team,11.0,81.437,5.0,10.0,Finished,,,,8.0,9.0,-1.0,0.9170000000000016
-23,Qatar Grand Prix,11,PER,Red Bull,9.0,81.425,17.0,0.0,Retired,,,,19.0,20.0,-1.0,0.9050000000000011
+23,Qatar Grand Prix,11,PER,Red Bull,9.0,81.425,17.0,0.0,Retired,,,,19.0,20.0,-1.0,0.9050000000000012
 23,Qatar Grand Prix,14,ALO,Aston Martin,8.0,81.208,7.0,6.0,Finished,,,,11.0,11.0,0.0,0.6880000000000024
-23,Qatar Grand Prix,16,LEC,Ferrari,5.0,80.852,2.0,18.0,Finished,,,,5.0,5.0,0.0,0.33200000000000784
-23,Qatar Grand Prix,18,STR,Aston Martin,15.0,81.911,18.0,0.0,Retired,,,,14.0,13.0,1.0,1.3910000000000053
+23,Qatar Grand Prix,16,LEC,Ferrari,5.0,80.852,2.0,18.0,Finished,,,,5.0,5.0,0.0,0.3320000000000078
+23,Qatar Grand Prix,18,STR,Aston Martin,15.0,81.911,18.0,0.0,Retired,,,,14.0,13.0,1.0,1.3910000000000051
 23,Qatar Grand Prix,20,MAG,Haas F1 Team,10.0,81.387,9.0,2.0,Finished,,,,15.0,10.0,5.0,0.8670000000000044
 23,Qatar Grand Prix,22,TSU,RB F1 Team,14.0,81.771,13.0,0.0,Finished,,,,16.0,17.0,-1.0,1.2510000000000048
-23,Qatar Grand Prix,23,ALB,Williams,16.0,82.39,15.0,0.0,Lapped,,,,12.0,15.0,-3.0,1.8700000000000045
+23,Qatar Grand Prix,23,ALB,Williams,16.0,82.39,15.0,0.0,Lapped,,,,12.0,15.0,-3.0,1.8700000000000043
 23,Qatar Grand Prix,24,ZHO,Sauber,12.0,81.501,8.0,4.0,Finished,,,,18.0,19.0,-1.0,0.9810000000000088
 23,Qatar Grand Prix,27,HUL,Haas F1 Team,18.0,82.442,16.0,0.0,Retired,,,,9.0,7.0,2.0,1.921999999999997
-23,Qatar Grand Prix,30,LAW,RB F1 Team,17.0,82.411,14.0,0.0,Finished,,,,10.0,16.0,-6.0,1.8910000000000053
+23,Qatar Grand Prix,30,LAW,RB F1 Team,17.0,82.411,14.0,0.0,Finished,,,,10.0,16.0,-6.0,1.8910000000000051
 23,Qatar Grand Prix,31,OCO,Alpine F1 Team,20.0,82.714,20.0,0.0,Retired,,,,17.0,14.0,3.0,2.1940000000000026
-23,Qatar Grand Prix,4,NOR,McLaren,3.0,80.772,10.0,2.0,Finished,,,,1.0,2.0,-1.0,0.25200000000000955
+23,Qatar Grand Prix,4,NOR,McLaren,3.0,80.772,10.0,2.0,Finished,,,,1.0,2.0,-1.0,0.2520000000000095
 23,Qatar Grand Prix,43,COL,Williams,19.0,82.594,19.0,0.0,Retired,,,,20.0,18.0,2.0,2.073999999999998
-23,Qatar Grand Prix,44,HAM,Mercedes,6.0,81.011,12.0,0.0,Finished,,,,7.0,6.0,1.0,0.49099999999999966
+23,Qatar Grand Prix,44,HAM,Mercedes,6.0,81.011,12.0,0.0,Finished,,,,7.0,6.0,1.0,0.4909999999999996
 23,Qatar Grand Prix,55,SAI,Ferrari,7.0,81.041,6.0,8.0,Finished,,,,4.0,4.0,0.0,0.5210000000000008
-23,Qatar Grand Prix,63,RUS,Mercedes,1.0,80.575,4.0,12.0,Finished,,,,2.0,3.0,-1.0,0.05500000000000682
-23,Qatar Grand Prix,77,BOT,Sauber,13.0,81.731,11.0,0.0,Finished,,,,13.0,12.0,1.0,1.2109999999999985
+23,Qatar Grand Prix,63,RUS,Mercedes,1.0,80.575,4.0,12.0,Finished,,,,2.0,3.0,-1.0,0.0550000000000068
+23,Qatar Grand Prix,77,BOT,Sauber,13.0,81.731,11.0,0.0,Finished,,,,13.0,12.0,1.0,1.2109999999999983
 23,Qatar Grand Prix,81,PIA,McLaren,4.0,80.829,3.0,15.0,Finished,,,,3.0,1.0,2.0,0.3089999999999975
 24,Abu Dhabi Grand Prix,1,VER,Red Bull,4.0,82.945,6.0,8.0,Finished,,,,,,,0.3499999999999943
 24,Abu Dhabi Grand Prix,10,GAS,Alpine F1 Team,5.0,82.984,7.0,6.0,Finished,,,,,,,0.3889999999999958
@@ -464,7 +464,7 @@ round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_ra
 24,Abu Dhabi Grand Prix,14,ALO,Aston Martin,8.0,83.196,9.0,2.0,Finished,,,,,,,0.6009999999999991
 24,Abu Dhabi Grand Prix,16,LEC,Ferrari,19.0,83.302,3.0,15.0,Finished,,,,,,,0.7070000000000078
 24,Abu Dhabi Grand Prix,18,STR,Aston Martin,13.0,83.729,14.0,0.0,Lapped,,,,,,,1.1340000000000003
-24,Abu Dhabi Grand Prix,20,MAG,Haas F1 Team,14.0,83.632,16.0,0.0,Lapped,,,,,,,1.0370000000000061
+24,Abu Dhabi Grand Prix,20,MAG,Haas F1 Team,14.0,83.632,16.0,0.0,Lapped,,,,,,,1.037000000000006
 24,Abu Dhabi Grand Prix,22,TSU,RB F1 Team,11.0,83.419,12.0,0.0,Lapped,,,,,,,0.8239999999999981
 24,Abu Dhabi Grand Prix,23,ALB,Williams,18.0,83.821,11.0,0.0,Lapped,,,,,,,1.225999999999999
 24,Abu Dhabi Grand Prix,24,ZHO,Sauber,15.0,83.88,13.0,0.0,Lapped,,,,,,,1.2849999999999966
@@ -477,4 +477,4 @@ round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_ra
 24,Abu Dhabi Grand Prix,61,DOO,Alpine F1 Team,17.0,84.105,15.0,0.0,Lapped,,,,,,,1.5100000000000051
 24,Abu Dhabi Grand Prix,63,RUS,Mercedes,6.0,83.132,5.0,10.0,Finished,,,,,,,0.5370000000000061
 24,Abu Dhabi Grand Prix,77,BOT,Sauber,9.0,83.204,18.0,0.0,Retired,,,,,,,0.6089999999999947
-24,Abu Dhabi Grand Prix,81,PIA,McLaren,2.0,82.804,10.0,1.0,Finished,,,,,,,0.20900000000000318
+24,Abu Dhabi Grand Prix,81,PIA,McLaren,2.0,82.804,10.0,1.0,Finished,,,,,,,0.2090000000000031

@@ -41,15 +41,17 @@ try:
 except Exception:
     st.caption("Race calendar unavailable (offline) — predictions still work from cached data.")
 
-# --- the two pipelines -----------------------------------------------------
-st.subheader("Two pipelines, four models")
+# --- the pipelines ---------------------------------------------------------
+st.subheader("Three pipelines, six models plus four milestone classifiers")
 
-race_col, grid_col = st.columns(2)
+race_col, grid_col, extras_col = st.columns(3)
 
 with race_col:
     st.markdown("##### :material/sports_score: Race prediction")
     st.markdown(
-        "Predicts the **finishing order** of a Grand Prix once the starting grid is known.\n\n"
+        "Predicts the **finishing order** of a Grand Prix — after qualifying with both "
+        "models, or before it with the direct model alone (no grid to anchor the gain "
+        "model to yet).\n\n"
         "- **Gain model** — predicts positions gained/lost vs the grid (finish − grid)\n"
         "- **Direct model** — predicts the absolute finishing position\n"
         "- **Baseline** — simply keeping grid order\n"
@@ -69,42 +71,66 @@ with race_col:
 with grid_col:
     st.markdown("##### :material/timer: Qualifying prediction")
     st.markdown(
-        "Predicts the **qualifying classification** the day before qualifying.\n\n"
+        "Predicts the **qualifying classification** before it runs.\n\n"
         "- **Anchor model** — predicts the change vs each driver's previous quali result\n"
-        "- **Direct model** — predicts the absolute qualifying position\n"
+        "- **Direct model** — predicts the absolute quali position\n"
         "- **Baseline** — repeating the previous qualifying order (persistence)\n"
     )
     with st.expander("Qualifying features"):
         st.markdown(
-            "- FP1/FP2 pace only — day-before-quali constraint\n"
+            "- FP1/FP2 pace, plus FP3 and sprint-race results once they have run\n"
             "- Sprint qualifying position & gap (sprint weekends)\n"
             "- Previous quali result, 3-round and season quali form\n"
             "- Team quali form and championship points\n"
             "- Team identity (categorical)\n\n"
-            "Never uses FP3 or the sprint race (they run too close to GP qualifying)."
+            "Sessions beyond FP1/FP2 are optional: predictions before they run rely on "
+            "Friday practice and historical form."
         )
     wc.page_link("webapp/page_quali.py", label="Open qualifying prediction", icon=":material/timer:")
+
+with extras_col:
+    st.markdown("##### :material/emoji_events: Milestones & extras")
+    st.markdown(
+        "Four small classifiers, each predicting one weekend milestone — pick one and "
+        "only it runs.\n\n"
+        "- **Pole position** — day-before-quali information (FP1/FP2, sprint quali, quali form)\n"
+        "- **Race winner** — from the grid, practice pace, sprint results and form\n"
+        "- **First retirement** — adds driver/team reliability history\n"
+        "- **Fastest lap** — one-lap pace, race pace and past fastest laps\n"
+        "- **Baselines** — best quali form, grid P1, most retirements, most fastest laps\n"
+    )
+    with st.expander("Milestone models"):
+        st.markdown(
+            "Each model scores every driver with a probability; the top pick is the "
+            "prediction. First-retirement and fastest-lap targets come from race lap "
+            "data, so this pipeline keeps its own season files (`extras_season_*.csv`)."
+        )
+    wc.page_link("webapp/page_extras.py", label="Open milestones & extras", icon=":material/emoji_events:")
 
 st.divider()
 
 # --- methodology -----------------------------------------------------------
 st.subheader("How models are evaluated")
 st.markdown(
-    "Both pipelines run a **rolling backtest** over the season: for each completed round, "
+    "Every pipeline runs a **rolling backtest** over the season: for each completed round, "
     "the models are retrained on all earlier rounds only, then predict that round. "
     "Reported metrics: mean absolute position error (MAE), podium hit rate, pole/winner "
     "hit rate and rank correlation — always compared against the naive baseline. "
-    "Models are `HistGradientBoostingRegressor` with a fixed seed: identical data gives "
-    "identical predictions.\n\n"
+    "Models are `HistGradientBoostingRegressor` (the two order pipelines) or "
+    "`HistGradientBoostingClassifier` (the milestone classifiers) with a fixed seed: "
+    "identical data gives identical predictions.\n\n"
     "Each prediction page offers two **model profiles**: *Fast* (fixed hyperparameters, "
     "quickest run) and *Optimized* (every model tunes its hyperparameters by minimizing "
-    "cross-validated MAE on the rounds it trains on — usually a better MAE, but a slower run)."
+    "cross-validated error — MAE for the order models, log loss for the milestone "
+    "classifiers — on the rounds it trains on; usually better, but a slower run)."
 )
 
 # --- cached data status ----------------------------------------------------
 st.subheader("Cached data")
 rows = []
-for kind, pattern, target in (("Race", "season_*.csv", "finish"), ("Qualifying", "quali_season_*.csv", "quali_pos")):
+for kind, pattern, target in (("Race", "season_*.csv", "finish"),
+                              ("Qualifying", "quali_season_*.csv", "quali_pos"),
+                              ("Extras", "extras_season_*.csv", "finish")):
     for path in sorted(f1_common.DATA_DIR.glob(pattern)):
         try:
             df = pd.read_csv(path)
@@ -129,5 +155,7 @@ with st.expander("Prefer the command line?"):
     st.markdown(
         "Both pipelines also run as command-line scripts. See the "
         "[GitHub README](https://github.com/scgon/Formula1RaceAndGridPredictor#quick-start-cli) "
-        "for setup, dependencies and the full list of flags."
+        "for setup, dependencies and the full list of flags. This hosted app runs on a free "
+        "shared cloud container — if it feels throttled or hits rate limits, running the "
+        "project locally (`python -m streamlit run app.py`) is faster and avoids them."
     )

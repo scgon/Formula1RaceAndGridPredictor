@@ -1,10 +1,12 @@
-"""Shared helpers for the F1 race and grid prediction pipelines.
+"""Shared helpers for the F1 prediction pipelines.
 
-predict_race.py and predict_grid.py remain independent entry points with their
-own features, targets and models; this module holds the machinery they share:
-fastf1 cache setup, UTC handling, qualifying-lap extraction, practice-lap
-features, the season CSV cache, the model factory and permutation importance.
-The Streamlit app (app.py) builds on the same functions.
+predict_race.py, predict_grid.py and predict_extras.py remain independent
+entry points with their own features, targets and models; this module holds
+the machinery they share: fastf1 cache setup, UTC handling, qualifying-lap
+extraction, practice-lap features, the season CSV cache, the model factory,
+permutation importance and the CLI verbosity gating (-q/--quiet, -v/--verbose;
+the web app runs at the default level). The Streamlit app (app.py) builds on
+the same functions.
 """
 
 import warnings
@@ -41,6 +43,47 @@ COMPLETION_BUFFER = timedelta(hours=3)
 # window) before it falls back to the save-and-stop behavior.
 RATE_LIMIT_WAIT_SECS = 600
 RATE_LIMIT_MAX_WAITS = 8
+
+# --- verbosity ---------------------------------------------------------------
+
+#: CLI output level, selected with the shared -v/--verbose and -q/--quiet
+#: flags (add_verbosity_args / apply_verbosity). The web app never touches
+#: it, so it always runs at the default:
+#:   0 quiet   backtest summary + final prediction only (no progress lines,
+#:             per-round backtest table or feature importance)
+#:   1 default today's full output
+#:   2 verbose  default plus live per-round backtest metrics,
+#:             hyperparameter-tuner decisions and importance spread
+VERBOSITY = 1
+
+
+def set_verbosity(level):
+    global VERBOSITY
+    VERBOSITY = int(level)
+
+
+def vprint(level, *args, **kwargs):
+    """print() gated on the current VERBOSITY (prints when VERBOSITY >= level)."""
+    if VERBOSITY >= level:
+        print(*args, **kwargs)
+
+
+def add_verbosity_args(parser):
+    """The -v/--verbose and -q/--quiet flags shared by the pipeline CLIs;
+    call apply_verbosity(args) right after parse_args."""
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("-q", "--quiet", action="store_true",
+                       help="print less: only the backtest summary and the final "
+                            "prediction (no progress lines, per-round backtest table "
+                            "or feature importance)")
+    group.add_argument("-v", "--verbose", action="store_true",
+                       help="print more: live per-round backtest metrics, "
+                            "hyperparameter-tuner decisions and importance spread")
+
+
+def apply_verbosity(args):
+    set_verbosity(2 if getattr(args, "verbose", False)
+                  else 0 if getattr(args, "quiet", False) else 1)
 
 # --- model profiles ---------------------------------------------------------
 
@@ -226,7 +269,7 @@ def collect_season(year, schedule, *, filename, required_columns, result_column,
     waits_left = RATE_LIMIT_MAX_WAITS
     for rn, name in todo:
         while True:
-            print(f"  fetching round {rn:>2}  {name} ...")
+            vprint(1, f"  fetching round {rn:>2}  {name} ...")
             try:
                 frame = load_round(year, rn, name)
                 break
@@ -251,7 +294,7 @@ def collect_season(year, schedule, *, filename, required_columns, result_column,
         if frame[result_column].notna().sum() == 0:
             print(f"  round {rn:>2} ({name}) skipped: no classified results yet")
             continue
-        print(f"  fetched round {rn:>2}  {name}")
+        vprint(1, f"  fetched round {rn:>2}  {name}")
         frames.append(frame)
     if rate_limited:
         print("  Rounds fetched so far are saved; the rest will download on the next run.")
@@ -364,7 +407,15 @@ def tune_hyperparameters(X, y, rounds, categorical_features=None,
         if mae < best_mae:
             best_mae = mae
             best_params = dict(zip(keys, combo))
-    if best_mae > fast_mae * (1 - TUNE_MIN_IMPROVEMENT):
+    keep_fast = best_mae > fast_mae * (1 - TUNE_MIN_IMPROVEMENT)
+    if VERBOSITY >= 2:
+        if best_params is None or keep_fast:
+            vprint(2, f"  tuner: keeping fast hyperparameters (pooled MAE "
+                      f"{fast_mae:.3f}; best found {best_mae:.3f})")
+        else:
+            vprint(2, f"  tuner: adopting {format_params(best_params)} (pooled MAE "
+                      f"{best_mae:.3f} vs fast {fast_mae:.3f})")
+    if keep_fast:
         return None
     return best_params
 
@@ -404,4 +455,5 @@ def importance_scores(model, feature_names, X, target, n_repeats=5):
 def importance_report(model, feature_names, X, target, label, width=24):
     print(f"\nFeature importance ({label} model, permutation, increase in MAE when shuffled):")
     for row in importance_scores(model, feature_names, X, target).itertuples():
-        print(f"  {row.feature:<{width}} {row.importance:+.3f}")
+        spread = f" ±{row.std:.3f}" if VERBOSITY >= 2 else ""
+        print(f"  {row.feature:<{width}} {row.importance:+.3f}{spread}")

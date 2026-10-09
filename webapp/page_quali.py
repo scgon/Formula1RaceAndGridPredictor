@@ -24,8 +24,9 @@ st.title("Qualifying Prediction")
 st.caption("Predicts the qualifying classification. **Anchor model**: change vs each driver's "
            "previous quali result. **Direct model**: absolute position. "
            "**Baseline**: repeating the last qualifying order. "
-           "Day-before-quali constraint: only FP1/FP2 and sprint qualifying feed the features — "
-           "never FP3 or the sprint race.")
+           "Features use whatever has run before qualifying — FP1/FP2 always, plus sprint "
+           "qualifying, FP3 and sprint-race results once those sessions have happened; they "
+           "are never mandatory, so predictions work the day before qualifying too.")
 
 if VERSION_KEY not in st.session_state:
     st.session_state[VERSION_KEY] = 0
@@ -97,8 +98,9 @@ colors = wc.team_colors(used_year)
 headline = f"{used_year} {event_name} — round {target}"
 if mode == "pre":
     st.subheader(f":material/rocket_launch: Prediction: {headline}")
-    st.caption("Pre-qualifying mode. Features come from FP1/FP2, sprint qualifying on sprint "
-               "weekends, and earlier weekends. Starting-grid penalties are not applied.")
+    st.caption("Pre-qualifying mode. Features come from the practice sessions, sprint "
+               "qualifying, and FP3 / sprint-race results when those have already run, "
+               "plus earlier weekends. Starting-grid penalties are not applied.")
 else:
     st.subheader(f":material/history: Review: {headline}")
     st.caption("This qualifying is already completed — models were trained only on earlier rounds, "

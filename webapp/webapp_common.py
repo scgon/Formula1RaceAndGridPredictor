@@ -1,7 +1,8 @@
 """Streamlit glue for the F1 prediction web app.
 
-No pipeline logic lives here — this module only wires the two pipelines
-(predict_race / predict_grid, both built on f1_common) into Streamlit.
+No pipeline logic lives here — this module only wires the three pipelines
+(predict_race / predict_grid / predict_extras, all built on f1_common) into
+Streamlit via run_pipeline / run_extras_pipeline.
 
 Execution is button-gated: changing a widget never starts the pipeline.
 Pressing **Run prediction** executes the whole pipeline once and stores a
@@ -15,6 +16,7 @@ streamed live into a log element: collect_season prints the round it is
 currently fetching (round number + event name) before each download.
 """
 
+import colorsys
 import io
 import sys
 import time
@@ -34,12 +36,13 @@ for _p in (_HERE, _HERE.parent / "pipelines"):
         sys.path.insert(0, str(_p))
 
 import f1_common
+import predict_extras
 import predict_race
 import predict_grid
 
 f1_common.setup()
 
-MODULES = {"race": predict_race, "grid": predict_grid}
+MODULES = {"race": predict_race, "grid": predict_grid, "extras": predict_extras}
 
 CURRENT_YEAR = datetime.now().year
 
@@ -124,7 +127,10 @@ def get_schedule(year):
 @st.cache_resource(show_spinner=False)
 def team_colors(year):
     """Team name -> hex color, taken straight from fastf1 session results
-    (the same source the notebooks use). Most recent completed round wins."""
+    (the same source the notebooks use). Most recent completed round wins.
+    The map is expanded with every historical name of each team, so frames
+    using either the CSV's or fastf1's naming find their color (see
+    TEAM_LINEAGES)."""
     import fastf1
     f1_common.setup()
     rounds = f1_common.completed_rounds(get_schedule(year))
@@ -136,10 +142,39 @@ def team_colors(year):
                       zip(session.results["TeamName"], session.results["TeamColor"])
                       if isinstance(c, str) and c}
             if colors:
-                return colors
+                return expand_team_aliases(colors)
         except Exception:
             continue
     return {}
+
+
+# The season CSVs carry historical constructor names (Alpine F1 Team, RB F1
+# Team, Red Bull, Sauber, ...) while fastf1 results use the current name for
+# the same team — and pre-race rows built from fastf1 sessions mix both
+# within one season. Each set below is one team's naming lineage: whichever
+# name a frame carries, the lookup resolves it to the name the season's
+# fastf1 color map actually contains.
+TEAM_LINEAGES = (
+    {"Red Bull", "Red Bull Racing"},
+    {"Renault", "Alpine", "Alpine F1 Team"},
+    {"Sauber", "Alfa Romeo", "Alfa Romeo Racing", "Kick Sauber", "Audi"},
+    {"Toro Rosso", "AlphaTauri", "RB", "RB F1 Team", "Racing Bulls"},
+    {"Force India", "Racing Point", "Aston Martin"},
+    {"Cadillac", "Cadillac F1 Team"},
+)
+
+
+def expand_team_aliases(colors):
+    """Color map with every historical name of each mapped team added, so a
+    frame using either naming scheme finds its team's color."""
+    expanded = dict(colors)
+    for lineage in TEAM_LINEAGES:
+        known = [name for name in lineage if name in colors]
+        if not known:
+            continue
+        for name in lineage:
+            expanded.setdefault(name, colors[known[0]])
+    return expanded
 
 
 def completed_round_numbers(schedule):
@@ -147,8 +182,11 @@ def completed_round_numbers(schedule):
     return [rn for rn, _name in f1_common.completed_rounds(schedule)]
 
 
-def bundled_years():
-    """Years whose season CSVs are bundled in the repo (both pipelines present).
+def bundled_years(kind=None):
+    """Years whose season CSVs are bundled in the repo (race + grid CSVs
+    present; for kind="extras" an extras CSV too — the extras data only
+    covers seasons it was generated for, and its first collection also
+    downloads race lap data).
 
     Selecting a bundled year never triggers a bulk season download — only
     rounds completed since the CSV snapshot (plus the upcoming round's
@@ -163,6 +201,9 @@ def bundled_years():
             continue
         if (f1_common.DATA_DIR / f"quali_season_{year}.csv").exists():
             years.add(year)
+    if kind == "extras":
+        years = {y for y in years
+                 if (f1_common.DATA_DIR / f"extras_season_{y}.csv").exists()}
     return sorted(years)
 
 
@@ -211,17 +252,23 @@ def resolve_target(kind, selection, year, schedule, data):
 
 
 def prepare_features(kind, season, target, mode, event_name):
-    """Season data + (in pre mode) the upcoming round, turned into features."""
+    """Season data + (in pre/prequali mode) the upcoming round, turned into
+    features."""
     mod = MODULES[kind]
     data = season["data"]
     with capture_stdout() as log:
-        if mode == "pre":
-            if kind == "race":
-                upcoming = mod.load_upcoming_round(season["year"], target, event_name)
-            else:
+        if mode == "prequali":
+            completed = sorted(data["round"].unique())
+            fallback = data[data["round"] == completed[-1]]
+            upcoming = mod.load_upcoming_round_prequali(season["year"], target, event_name, fallback)
+            data = pd.concat([data[data["round"] != target], upcoming], ignore_index=True)
+        elif mode == "pre":
+            if kind == "grid":
                 completed = sorted(data["round"].unique())
                 fallback = data[data["round"] == completed[-1]]
                 upcoming = mod.load_upcoming_round(season["year"], target, event_name, fallback)
+            else:  # race and extras both build the upcoming frame from quali results
+                upcoming = mod.load_upcoming_round(season["year"], target, event_name)
             data = pd.concat([data[data["round"] != target], upcoming], ignore_index=True)
         features = mod.build_features(data)
     return {"features": features, "log": log.getvalue()}
@@ -251,13 +298,20 @@ def run_pipeline(kind, year, data_version, force_refresh, selection, min_train,
             used_year = season["year"]
             target, mode, event_name, resolve_log = resolve_target(
                 kind, selection, used_year, season["schedule"], season["data"])
+            # pre-quali race prediction: no grid yet, so the gain model has
+            # nothing to anchor to and only the direct model runs
+            direct_only = kind == "race" and mode == "prequali"
             prep = prepare_features(kind, season, target, mode, event_name)
             features = prep["features"]
             with st.spinner(f"Running rolling backtest (one model pair per round){tune_note}..."):
                 records = mod.backtest_records(features, min_train, profile)
             with st.spinner("Training final models and computing permutation importance..."):
-                pred = mod.final_predictions(features, target, profile)
-                imp_main = mod.importance_frame(pred, main_mode)
+                if direct_only:
+                    pred = mod.final_predictions(features, target, profile, models="direct")
+                    imp_main = None
+                else:
+                    pred = mod.final_predictions(features, target, profile)
+                    imp_main = mod.importance_frame(pred, main_mode)
                 imp_direct = mod.importance_frame(pred, "direct")
         return {
             "settings": (year, data_version, force_refresh, selection, min_train, profile),
@@ -271,20 +325,86 @@ def run_pipeline(kind, year, data_version, force_refresh, selection, min_train,
             "prep_log": prep["log"],
             "features": features,
             "records": records,
-            "main": pred[main_mode],
+            "main": pred["direct"] if direct_only else pred[main_mode],
             "train_rounds": int(pred["train"]["round"].nunique()),
             "imp_main": imp_main,
             "imp_direct": imp_direct,
-            "tuned_params": ({main_mode: pred[f"{main_mode}_params"],
-                              "direct": pred["direct_params"]}
-                             if profile == "optimized" else None),
+            "tuned_params": ({"direct": pred["direct_params"]} if direct_only
+                             else ({main_mode: pred[f"{main_mode}_params"],
+                                    "direct": pred["direct_params"]}
+                                   if profile == "optimized" else None)),
         }
     except TargetUnavailable as exc:
         return {"error": str(exc)}
     except RateLimitExceededError:
         return {"error": "The F1 data API rate limit was hit (500 calls per hour) — "
                          "this clears within the hour. Rounds fetched so far are saved; "
-                         "press Run prediction again later."}
+                         "press Run prediction again later. On the hosted app the limit is "
+                         "shared with other visitors — running the project locally "
+                         "(`python -m streamlit run app.py`) avoids it."}
+    except Exception as exc:  # download failures etc.
+        return {"error": f"Pipeline failed: {type(exc).__name__}: {exc}"}
+    finally:
+        log_box.empty()
+
+
+def run_extras_pipeline(year, data_version, force_refresh, selection, min_train,
+                        profile="fast", milestone="pole"):
+    """Execute the extras pipeline for ONE selected milestone model
+    (pole / winner / first_dnf / fastest_lap) with the given settings.
+
+    Returns a render bundle for the extras page (stored in
+    st.session_state by the caller), or {"error": message} when the run
+    failed. Download progress and the per-model training lines stream live
+    into a log element, like run_pipeline.
+    """
+    log_box = st.empty()
+    tune_note = " (tuning hyperparameters per model)" if profile == "optimized" else ""
+    try:
+        with capture_stdout(log_box, refresh_secs=0.3):
+            season = load_season("extras", year, force_refresh)
+            if season["data"] is None:
+                return {"error": "No milestone data available for this or the previous season."}
+            used_year = season["year"]
+            target, mode, event_name, resolve_log = resolve_target(
+                "extras", selection, used_year, season["schedule"], season["data"])
+            prep = prepare_features("extras", season, target, mode, event_name)
+            features = prep["features"]
+            with st.spinner(f"Running rolling backtest (one {milestone.replace('_', ' ')} "
+                            f"model per round){tune_note}..."):
+                records = predict_extras.backtest_records(features, min_train, profile,
+                                                          milestone)
+            with st.spinner("Training final model and computing permutation importance..."):
+                pred = predict_extras.final_predictions(features, target, profile, milestone)
+                imp = predict_extras.importance_frame(pred)
+        return {
+            "settings": (year, data_version, force_refresh, selection, min_train, profile,
+                         milestone),
+            "requested_year": year,
+            "year": used_year,
+            "target": target,
+            "mode": mode,
+            "event": event_name,
+            "resolve_log": resolve_log,
+            "season_log": season["log"],
+            "prep_log": prep["log"],
+            "features": features,
+            "records": records,
+            "milestone": milestone,
+            "pred": pred,
+            "imp": imp,
+            "train_rounds": pred.get("train_rounds", 0),
+            "tuned_params": ({milestone: pred["params"]}
+                             if profile == "optimized" and "error" not in pred else None),
+        }
+    except TargetUnavailable as exc:
+        return {"error": str(exc)}
+    except RateLimitExceededError:
+        return {"error": "The F1 data API rate limit was hit (500 calls per hour) — "
+                         "this clears within the hour. Rounds fetched so far are saved; "
+                         "press Run prediction again later. On the hosted app the limit is "
+                         "shared with other visitors — running the project locally "
+                         "(`python -m streamlit run app.py`) avoids it."}
     except Exception as exc:  # download failures etc.
         return {"error": f"Pipeline failed: {type(exc).__name__}: {exc}"}
     finally:
@@ -307,7 +427,7 @@ def season_inputs(kind):
     Nothing here executes the pipeline: the force checkbox only takes effect
     on the next Reload/Run press, and Reload refreshes the data layer only.
     """
-    available = bundled_years()
+    available = bundled_years(kind)
     if available:
         options = sorted(set(available) | {max(available) + 1})
         default = CURRENT_YEAR if CURRENT_YEAR in options else max(options)
@@ -339,7 +459,8 @@ def season_inputs(kind):
 
 def target_selectbox(kind, schedule, completed_rounds):
     """Round selector. Returns None (auto), "next", or a round number."""
-    label = "Target race" if kind == "race" else "Target qualifying"
+    label = {"race": "Target race", "grid": "Target qualifying",
+             "extras": "Target weekend"}[kind]
     options = {"Auto (recommended)": None, "Next on the calendar": "next"}
     for _, row in schedule.iterrows():
         rn = int(row["RoundNumber"])
@@ -460,22 +581,97 @@ def page_link(path, label, icon):
 # colors
 # ---------------------------------------------------------------------------
 
-def readable_color(hex_color, fallback="#999999"):
-    """Team color adjusted to stay readable as text on a white background."""
-    if not hex_color:
-        hex_color = fallback
+# Streamlit's default theme backgrounds (the app ships no config.toml, so
+# these are what light and dark mode actually render on).
+LIGHT_BACKGROUND = (255, 255, 255)
+DARK_BACKGROUND = (14, 17, 23)
+CONTRAST_TARGET = 4.5  # WCAG AA contrast for normal-size text
+
+
+def theme_is_dark():
+    """Whether the app currently renders in dark mode. Streamlit reruns the
+    script when the user switches themes, so tables and charts pick up
+    re-adjusted colors on the switch. Falls back to light mode outside a
+    script run (bare imports, non-Streamlit contexts)."""
     try:
-        r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
-    except (ValueError, IndexError):
-        return fallback
-    luminance = 0.299 * r + 0.587 * g + 0.114 * b
-    if luminance > 170:
-        factor = 0.5
-    elif luminance > 135:
-        factor = 0.72
+        return st.context.theme.type == "dark"
+    except Exception:
+        return False
+
+
+def _parse_hex(hex_color):
+    """'#RRGGBB' -> (r, g, b), or None when it is not a valid hex color."""
+    try:
+        return tuple(int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
+    except (TypeError, ValueError, IndexError):
+        return None
+
+
+def _relative_luminance(rgb):
+    def channel(value):
+        value /= 255
+        return value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
+    r, g, b = (channel(v) for v in rgb)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _contrast(rgb_a, rgb_b):
+    """WCAG contrast ratio between two colors (1..21)."""
+    lum_a, lum_b = _relative_luminance(rgb_a), _relative_luminance(rgb_b)
+    low, high = min(lum_a, lum_b), max(lum_a, lum_b)
+    return (high + 0.05) / (low + 0.05)
+
+
+def _fit_lightness(rgb, background, dark, target=CONTRAST_TARGET):
+    """Same hue and saturation, lightness shifted just far enough toward
+    white (dark mode) or black (light mode) to reach the target contrast."""
+    hue, light, sat = colorsys.rgb_to_hls(*(v / 255 for v in rgb))
+
+    def at(lightness):
+        return tuple(round(c * 255) for c in colorsys.hls_to_rgb(hue, lightness, sat))
+
+    # the original color failed, the extreme (white on dark / black on
+    # light) always passes — bisect for the closest passing lightness
+    if dark:
+        low, high = light, 1.0
     else:
-        factor = 1.0
-    return "#{:02x}{:02x}{:02x}".format(int(r * factor), int(g * factor), int(b * factor))
+        low, high = 0.0, light
+    for _ in range(24):
+        mid = (low + high) / 2
+        if _contrast(at(mid), background) >= target:
+            if dark:
+                high = mid
+            else:
+                low = mid
+        elif dark:
+            low = mid
+        else:
+            high = mid
+    best = high if dark else low
+    rgb_out = at(best)
+    for _ in range(8):  # 8-bit rounding can land a hair under the target
+        if _contrast(rgb_out, background) >= target:
+            break
+        best = min(1.0, best + 0.02) if dark else max(0.0, best - 0.02)
+        rgb_out = at(best)
+    return rgb_out
+
+
+def readable_color(hex_color, fallback="#999999", dark=None):
+    """Team color adjusted to stay readable as text in the active theme.
+
+    Colors that already contrast well pass through unchanged; the rest keep
+    their hue and saturation but are darkened (light mode) or brightened
+    (dark mode) until they reach WCAG-AA contrast against the theme
+    background — so every team color reads clearly in both modes.
+    """
+    rgb = _parse_hex(hex_color) or _parse_hex(fallback)
+    if dark is None:
+        dark = theme_is_dark()
+    background = DARK_BACKGROUND if dark else LIGHT_BACKGROUND
+    if _contrast(rgb, background) < CONTRAST_TARGET:
+        rgb = _fit_lightness(rgb, background, dark)
+    return "#{:02x}{:02x}{:02x}".format(*rgb)
 
 
 PODIUM_STYLES = {
@@ -530,7 +726,8 @@ def predicted_order_chart(rows, cut_lines, colors, slot_label="position"):
     rows: list of (label, DataFrame, position_column), top to bottom
     (the first entry renders as the bottom lane).
     cut_lines: {position: label} for the dashed reference lines.
-    colors: team -> hex color map.
+    colors: team -> hex color map (raw team colors; driver codes and cut
+    lines are adjusted for the active theme via readable_color).
     """
     lane_names = [label for label, _, _ in rows]
     pieces = []
@@ -542,7 +739,8 @@ def predicted_order_chart(rows, cut_lines, colors, slot_label="position"):
     data["position"] = data["position"].astype(float)
     n_slots = int(data["position"].max())
     teams = list(dict.fromkeys(data["team"]))
-    scale = alt.Scale(domain=teams, range=[colors.get(t, "#999999") for t in teams])
+    scale = alt.Scale(domain=teams,
+                      range=[readable_color(colors.get(t, "#999999")) for t in teams])
     lane_order = list(reversed(lane_names))  # first list entry = bottom lane
 
     lanes = alt.Chart(data).mark_text(fontSize=16, fontWeight="bold").encode(
@@ -561,8 +759,9 @@ def predicted_order_chart(rows, cut_lines, colors, slot_label="position"):
         cuts = pd.DataFrame({"position": list(cut_lines.keys()),
                              "label": list(cut_lines.values()),
                              "lane": lane_names[0]})
-        rules = alt.Chart(cuts).mark_rule(color="#888888", strokeDash=[5, 5]).encode(x="position:Q")
-        cut_labels = alt.Chart(cuts).mark_text(fontSize=10, color="#888888", dy=-15).encode(
+        guide_color = readable_color("#888888")
+        rules = alt.Chart(cuts).mark_rule(color=guide_color, strokeDash=[5, 5]).encode(x="position:Q")
+        cut_labels = alt.Chart(cuts).mark_text(fontSize=10, color=guide_color, dy=-15).encode(
             x="position:Q", y=alt.Y("lane:N", sort=lane_order), text="label:N")
         return rules + lanes + cut_labels
     return lanes
