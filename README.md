@@ -18,7 +18,7 @@ Two independent ML pipelines for predicting F1 race results and qualifying grids
 │   ├── page_home.py         # homepage: next race, cached-data status, methodology
 │   ├── page_race.py         # race prediction page
 │   ├── page_quali.py        # qualifying prediction page
-│   ├── page_extras.py       # milestone prediction page (all four models)
+│   ├── page_extras.py       # milestone prediction page (one selected model per run)
 │   └── webapp_common.py     # app-only glue: run_pipeline, live stdout capture, table/chart helpers (no pipeline logic)
 ├── notebooks/               # interactive inline copies of the order pipelines
 │   ├── race_predictions.ipynb
@@ -56,7 +56,7 @@ If your system's `python` is missing or maps to an old Python, create the venv w
 |--------|--------|--------|----------|
 | `pipelines/predict_race.py` | Race finish position | **Gain** (finish − grid) vs **Direct** (absolute finish) | Grid order |
 | `pipelines/predict_grid.py` | Qualifying position | **Anchor** (change vs last quali) vs **Direct** (absolute position) | Last quali order (persistence) |
-| `pipelines/predict_extras.py` | One of: pole sitter, race winner, first retirement, fastest lap (`--milestone`) | One binary classifier for the selected milestone (driver probabilities; top pick = prediction) | Pole: best season quali form · Winner: grid P1 · First DNF: most retirements · Fastest lap: most FLs / fastest qualifier |
+| `pipelines/predict_extras.py` | One of: pole sitter, race winner, first retirement, fastest lap, sprint pole sitter, sprint winner (`--milestone`) | One binary classifier for the selected milestone (driver probabilities; top pick = prediction) | Pole: best season quali form · Winner: grid P1 · First DNF: most retirements · Fastest lap: most FLs / fastest qualifier · Sprint pole: past sprint-quali form · Sprint winner: sprint grid P1 |
 
 The two order pipelines use `HistGradientBoostingRegressor`; the milestone pipeline uses `HistGradientBoostingClassifier`. All run a rolling backtest, and feature sets are tailored per model in the milestone pipeline. Two model profiles are selectable (`--model` on the CLI, *Model profile* in the web app): **fast** (fixed hyperparameters, quickest) and **optimized** (every model tunes its hyperparameters by minimizing cross-validated error — MAE for the order models, log loss for the milestone classifiers — over its own training rounds; better error on average, slower to run; models fall back to the fast values whenever no candidate clearly beats them).
 
@@ -78,6 +78,7 @@ The race pipeline runs in three modes: it reviews completed rounds (`post`), pre
 **Milestones (`predict_extras.py`):**
 - Pole model: the grid pipeline's original day-before-quali set (FP1/FP2, sprint quali, quali form)
 - Race milestone models (winner / first retirement / fastest lap): same pre-race information as the race pipeline, plus driver/team reliability (DNF rates) and milestone history (wins, fastest laps, retirements so far)
+- Sprint models (sprint pole / sprint winner): pre-sprint information — FP1, past sprint and quali form; the sprint winner additionally uses the weekend's sprint quali result. They exist on sprint weekends only (~5 per season), and their targets are derived from the stored sprint quali/race results
 - First-retirement and fastest-lap targets come from race lap data, so this pipeline keeps its own season CSVs (`data/extras_season_*.csv`; currently bundled for 2025–2026)
 
 ## Web App
@@ -97,7 +98,7 @@ Four pages:
 | **Home** | Next race on the calendar, cached-data status, methodology overview |
 | **Race prediction** | Gain vs direct prediction table, error-by-round chart, final predicted order diagram, backtest metrics, podium points and predicted-winner tables, feature importance. Before qualifying runs it switches to direct-model-only (no grid yet) |
 | **Qualifying prediction** | Anchor vs direct prediction table, error-by-round chart, final predicted grids diagram, backtest metrics, pole points and predicted-pole tables, feature importance |
-| **Milestones & extras** | Pick one milestone model (pole, winner, first retirement, fastest lap) in the sidebar — only it runs. Full driver-probability table with the actual outcome marked, top-10 probability chart, backtest hit-rate metrics vs the naive baseline, cumulative-hits and model-confidence charts, per-round picks table, milestone points and feature importance. After qualifying (pre-race mode) the pole model's call is already scored; the race milestones stay open until the race |
+| **Milestones & extras** | Pick one milestone model (pole, winner, first retirement, fastest lap, sprint pole, sprint winner) in the sidebar — only it runs. Full driver-probability table with the actual outcome marked, top-10 probability chart, backtest hit-rate metrics vs the naive baseline, cumulative-hits and model-confidence charts, per-round picks table, milestone points and feature importance. After qualifying (pre-race mode) the pole and sprint calls are already scored; the race milestones stay open until the race |
 
 Presentation notes:
 - Runs are explicit: change any setting and press **Run prediction** — changing a widget never starts the pipeline. **Reload season data** refreshes the underlying data (downloading newly completed rounds, or everything when *Force full re-download* is checked — checking the box alone downloads nothing), and progress is shown live in a log while data loads and while the backtest trains each round's models (round, event, model — and whether hyperparameters are being tuned).
@@ -146,7 +147,7 @@ Run with `-u` (unbuffered output) and don't pipe long runs through `head` — bl
 | `--season YEAR` | Season year (default: current, falls back to previous) |
 | `--predict-round N` | Round number to predict |
 | `--next` | Auto-select next race/quali on calendar |
-| `--milestone {pole,winner,first_dnf,fastest_lap}` | Milestone pipeline: which one of the four models to run (default: pole) |
+| `--milestone {pole,winner,first_dnf,fastest_lap,sprint_pole,sprint_win}` | Milestone pipeline: which one of the six models to run (default: pole) |
 | `--model {fast,optimized}` | Model profile: `fast` uses fixed hyperparameters, `optimized` tunes them per model by minimizing cross-validated error (better, slower run) |
 | `--models {both,gain,direct}` / `{both,anchor,direct}` | Which models the race / qualifying pipeline trains, backtests and predicts (default: both). A pre-quali race target always runs the direct model only — there is no grid to anchor the gain model to |
 | `-q`, `--quiet` | Print less: only the backtest summary and the final prediction (no progress lines, per-round backtest table or feature importance) |
@@ -190,7 +191,7 @@ python -m nbconvert --to notebook --execute --inplace notebooks/grid_predictions
 - The season CSVs (`data/*.csv`) are tracked in the repo and kept current by a scheduled GitHub workflow (`.github/workflows/refresh-data.yml`, running `scripts/refresh_data.py`): fastf1 hard-stops at 500 uncached API calls/hour, and a cold Streamlit Cloud container (disk resets on every restart) would otherwise bulk-download whole seasons on the first run and hit that limit. The refresh script detects outdated CSV schemas (a pipeline feature change rewrites every bundled season it runs for) and collects the extras kind only for the default years or years that already have an extras CSV. The extras pipeline's first collection of a season also downloads race lap data (~25–30 API calls per round), so its CSVs exist for 2025–2026 and the web app's season picker only offers years whose extras CSV is bundled (the CLI stays unrestricted)
 - Race completion buffer: 3 hours after race start (prevents caching partial results during live races)
 - Grid pipeline information set: FP1/FP2 always, plus sprint quali, FP3 and sprint-race results when those sessions have already run — optional features that are NaN before they happen, so pre-quali predictions work at any time. The extras pole model keeps the grid pipeline's original day-before-quali set (FP1/FP2 + sprint quali); the extras race-milestone models use the race pipeline's pre-race information set
-- Extras milestone definitions: pole = quali P1; winner = race P1; first retirement = the retiree(s) with the fewest completed laps (lap-1 ties are kept as a set — a hit is any of them); DNS and DSQ rows are never retirements
+- Extras milestone definitions: pole = quali P1; winner = race P1; first retirement = the retiree(s) with the fewest completed laps (lap-1 ties are kept as a set — a hit is any of them); DNS and DSQ rows are never retirements; sprint pole = sprint-quali P1 and sprint winner = sprint-race P1, both derived from the stored sprint results and existing only on sprint weekends
 
 ## Common Issues
 
