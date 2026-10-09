@@ -8,6 +8,9 @@ for _p in (_HERE, _HERE.parent / "pipelines"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
+import _bootstrap
+_bootstrap.fresh_modules()
+
 import pandas as pd
 import streamlit as st
 

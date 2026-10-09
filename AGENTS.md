@@ -21,6 +21,7 @@
 │   ├── page_race.py
 │   ├── page_quali.py
 │   ├── page_extras.py       # one selected milestone model per run (sidebar selectbox)
+│   ├── _bootstrap.py        # stale-module guard healing live code pulls (see below)
 │   └── webapp_common.py     # app-only glue (run_pipeline, run_extras_pipeline, stdout capture, table/chart helpers)
 ├── notebooks/               # inline copies of the order pipelines (manual sync)
 ├── scripts/refresh_data.py  # regenerates the bundled season CSVs (used by the workflow)
@@ -30,6 +31,8 @@
 ```
 
 Page scripts and `webapp_common` self-bootstrap `sys.path` (`webapp/` + `pipelines/`), so they run from the repo root without installation; `app.py` needs no bootstrap (imports only streamlit). `f1_common.BASE_DIR` points at the repo root, so `cache/` and `data/` are shared by pipelines, web app and notebooks no matter where each is executed from.
+
+**Stale-module guard**: every page calls `webapp/_bootstrap.fresh_modules()` right after its path bootstrap. Streamlit Community Cloud pulls new commits into the *live* app process without restarting the interpreter ("Updated app!" — no "Starting up repository"), so page scripts re-execute from the new source while `sys.modules` keeps serving the pre-pull modules — the extras commit's first deploy crashed exactly this way (`AttributeError: module 'webapp_common' has no attribute 'run_extras_pipeline'` in a process up since the previous evening, while race/quali pages kept working because their module API was unchanged). `fresh_modules` compares each module's source file (mtime, size) against the stamp recorded at the last verification and `importlib.reload`s the whole chain in dependency order on drift (stamped in `MODULES`: f1_common → the three pipelines → webapp_common), so the app self-heals on the first rerun after a code pull; reloads keep `@st.cache_resource` hits intact (Streamlit hashes `__module__`+`__qualname__`, not object identity). Gotcha: `_bootstrap.py` itself cannot self-heal (the running guard would already have to be the new version) — keep it tiny, stdlib-only and stable.
 
 ## Commands
 
