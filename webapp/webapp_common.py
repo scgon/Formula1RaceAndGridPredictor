@@ -24,6 +24,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import urlparse
 
 import altair as alt
 import pandas as pd
@@ -529,20 +530,44 @@ def first_backtest_control(kind, completed):
     return sum(1 for r in completed if r < selected)
 
 
+def on_community_cloud():
+    """Whether the app is served by Streamlit Community Cloud — every
+    Community Cloud app lives at a *.streamlit.app URL, so the request URL
+    identifies the deployment (st.context.url since Streamlit 1.45, well
+    under the >=1.55 requirements pin). Locally, under AppTest (where the
+    URL is None) and on any other host this is False, so fail-open: the
+    optimized model profile stays selectable everywhere except the cloud.
+    """
+    try:
+        host = urlparse(st.context.url or "").hostname or ""
+        return host.endswith(".streamlit.app")
+    except Exception:
+        return False
+
+
 def model_profile_input(kind):
     """Sidebar selectbox for the model profile (the CLI --model flag).
 
     "Fast" keeps the project's fixed hyperparameters; "Optimized" runs a
     small hyperparameter search per trained model (minimizing
     cross-validated MAE over the training rounds) — usually a better MAE,
-    but the backtest takes noticeably longer.
+    but the backtest takes noticeably longer. The optimized profile is
+    offered only off Streamlit Community Cloud: its multi-minute searches
+    would stall the shared cloud container, so it is hidden there (and
+    still available via the CLI or a local streamlit run).
     """
     options = ("Fast", "Optimized")
+    if on_community_cloud():
+        options = ("Fast",)
     choice = st.selectbox(
         "Model profile", options, key=f"{kind}_model_profile",
         help="Fast: fixed hyperparameters, quickest run. Optimized: every model tunes its "
              "hyperparameters by minimizing cross-validated MAE on the rounds it trains on — "
              "better predictions on average, but the run takes longer.")
+    if len(options) == 1:
+        st.caption("The slower *Optimized* profile is disabled on this hosted app — its "
+                   "per-model hyperparameter searches would hog the shared container for "
+                   "minutes per run. Run the app locally to use it.")
     return "optimized" if choice == "Optimized" else "fast"
 
 
@@ -723,6 +748,30 @@ def zero_error_css(value):
         return "background-color: #b7f0c8; color: #0b5c2a; font-weight: 600" if float(value) == 0 else ""
     except (TypeError, ValueError):
         return ""
+
+
+def probability_css(value, dark=None):
+    """Cell style for the extras page's probability column: a translucent
+    blue fill whose opacity tracks the probability, with the text color
+    fitted for WCAG-AA contrast against the fill *blended over the theme
+    background*. The blend stays dark in dark mode, so the light-mode navy
+    text would be invisible there — dark mode uses a light blue instead
+    (and light mode darkens the navy a touch where the fill is strongest).
+    """
+    if pd.isna(value):
+        return ""
+    if dark is None:
+        dark = theme_is_dark()
+    fill_rgb = (0, 98, 255)
+    alpha = 0.12 + 0.6 * float(value)  # fill opacity tracks the probability
+    base = DARK_BACKGROUND if dark else LIGHT_BACKGROUND
+    blend = tuple(round(alpha * c + (1 - alpha) * b)
+                  for c, b in zip(fill_rgb, base))
+    text = (211, 232, 255) if dark else (11, 47, 107)  # light blue / navy
+    if _contrast(text, blend) < CONTRAST_TARGET:
+        text = _fit_lightness(text, blend, dark)
+    return (f"background-color: rgba({fill_rgb[0]}, {fill_rgb[1]}, {fill_rgb[2]}, {alpha}); "
+            f"color: #{text[0]:02x}{text[1]:02x}{text[2]:02x}")
 
 
 def team_css(team, colors, bold=False):

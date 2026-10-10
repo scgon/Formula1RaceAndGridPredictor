@@ -128,7 +128,9 @@ st.markdown(
     "Each prediction page offers two **model profiles**: *Fast* (fixed hyperparameters, "
     "quickest run) and *Optimized* (every model tunes its hyperparameters by minimizing "
     "cross-validated error — MAE for the order models, log loss for the milestone "
-    "classifiers — on the rounds it trains on; usually better, but a slower run)."
+    "classifiers — on the rounds it trains on; usually better, but a slower run). "
+    "*Optimized* is only offered when the app runs locally — the hosted deployment "
+    "disables it to keep runs quick."
 )
 
 # --- cached data status ----------------------------------------------------

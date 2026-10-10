@@ -151,8 +151,6 @@ if "error" in pred:
     st.warning(f"No model — {pred['error']}")
 else:
     table = pred["table"]
-    proba_css = lambda v: "" if pd.isna(v) \
-        else f"background-color: rgba(0, 98, 255, {0.12 + 0.6 * float(v)}); color: #0b2f6b"
     achieved_css = "background-color: #b7f0c8; color: #0b5c2a; font-weight: 600"
 
     disp = pd.DataFrame({
@@ -173,7 +171,7 @@ else:
 
     styled = disp.style.format(fmt, na_rep="")
     styled = styled.map(wc.position_css, subset=["Rank"])
-    styled = styled.map(proba_css, subset=["Probability"])
+    styled = styled.map(wc.probability_css, subset=["Probability"])
     if "Achieved" in disp.columns:
         styled = styled.map(lambda v: achieved_css if v == "yes" else "", subset=["Achieved"])
     styled = wc.style_driver_team_columns(styled, table, colors)
