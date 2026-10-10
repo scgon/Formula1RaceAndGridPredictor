@@ -304,7 +304,10 @@ def resolve_target(kind, selection, year, schedule, data, milestone=None):
 
 def prepare_features(kind, season, target, mode, event_name):
     """Season data + (in pre/prequali mode) the upcoming round, turned into
-    features."""
+    features. Returns {"features", "mode", "log"} — mode is the possibly
+    downgraded target mode: a race pre target whose qualifying results the
+    provider has not ingested yet has no grid, so it downgrades to prequali
+    and the direct model predicts alone."""
     mod = MODULES[kind]
     data = season["data"]
     with capture_stdout() as log:
@@ -319,11 +322,18 @@ def prepare_features(kind, season, target, mode, event_name):
                 completed = sorted(data["round"].unique())
                 fallback = data[data["round"] == completed[-1]]
                 upcoming = mod.load_upcoming_round(season["year"], target, event_name, fallback)
-            else:  # race and extras both build the upcoming frame from quali results
+            elif kind == "race":
+                # checked loader downgrades to prequali when quali produced
+                # no results yet (data-provider lag) — no grid to anchor to
+                completed = sorted(data["round"].unique())
+                fallback = data[data["round"] == completed[-1]]
+                upcoming, mode = mod.load_upcoming_round_checked(
+                    season["year"], target, event_name, fallback)
+            else:  # extras builds the upcoming frame from quali results
                 upcoming = mod.load_upcoming_round(season["year"], target, event_name)
             data = pd.concat([data[data["round"] != target], upcoming], ignore_index=True)
         features = mod.build_features(data)
-    return {"features": features, "log": log.getvalue()}
+    return {"features": features, "mode": mode, "log": log.getvalue()}
 
 
 def run_pipeline(kind, year, data_version, force_refresh, selection, min_train,
@@ -350,11 +360,16 @@ def run_pipeline(kind, year, data_version, force_refresh, selection, min_train,
             used_year = season["year"]
             target, mode, event_name, resolve_log = resolve_target(
                 kind, selection, used_year, season["schedule"], season["data"])
+            prep = prepare_features(kind, season, target, mode, event_name)
+            features = prep["features"]
+            # a race pre target whose qualifying results the provider has
+            # not ingested yet downgrades to prequali: no grid to anchor
+            # the gain model to, so only the direct model runs
+            downgraded = kind == "race" and mode == "pre" and prep["mode"] == "prequali"
+            mode = prep["mode"]
             # pre-quali race prediction: no grid yet, so the gain model has
             # nothing to anchor to and only the direct model runs
             direct_only = kind == "race" and mode == "prequali"
-            prep = prepare_features(kind, season, target, mode, event_name)
-            features = prep["features"]
             with st.spinner(f"Running rolling backtest (one model pair per round){tune_note}..."):
                 records = mod.backtest_records(features, min_train, profile)
             with st.spinner("Training final models and computing permutation importance..."):
@@ -365,12 +380,22 @@ def run_pipeline(kind, year, data_version, force_refresh, selection, min_train,
                     pred = mod.final_predictions(features, target, profile)
                     imp_main = mod.importance_frame(pred, main_mode)
                 imp_direct = mod.importance_frame(pred, "direct")
+        grid_note = None
+        if downgraded:
+            grid_note = (
+                "Qualifying has finished, but the results provider has no classification "
+                "for it yet — there is no grid to anchor the gain model to, so the direct "
+                "model predicts the finish order from practice, sprint and season-form "
+                "features, exactly like a pre-qualifying run. The backtest below still "
+                "scores both models on completed rounds. Run the prediction again later "
+                "for the grid-anchored forecast.")
         return {
             "settings": (year, data_version, force_refresh, selection, min_train, profile),
             "requested_year": year,
             "year": used_year,
             "target": target,
             "mode": mode,
+            "grid_note": grid_note,
             "event": event_name,
             "resolve_log": resolve_log,
             "season_log": season["log"],

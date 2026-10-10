@@ -209,6 +209,30 @@ def load_upcoming_round_prequali(year, round_number, event_name, fallback):
     return _merge_weekend_features(frame, year, round_number)
 
 
+def load_upcoming_round_checked(year, round_number, event_name, fallback):
+    """Pre-mode upcoming frame with a data-lag fallback, as (frame, mode).
+
+    The results provider can lag hours behind a session, so a qualifying
+    that has already run can still carry no results: every entrant row then
+    has a NaN grid and the gain model would filter itself down to zero
+    rows (sklearn then fails with "Found array with 0 sample(s)"). Such a
+    round downgrades to prequali mode — the direct model predicts from
+    practice, sprint and season-form features, exactly like a pre-quali
+    run. The frame keeps the quali entry list (which fastf1 serves even
+    without results); when even that is missing it falls back to the
+    pre-quali loader's practice/last-round entrants."""
+    upcoming = load_upcoming_round(year, round_number, event_name)
+    if upcoming.empty:
+        upcoming = load_upcoming_round_prequali(year, round_number, event_name, fallback)
+    if upcoming["grid"].notna().sum() == 0:
+        print("\nQualifying for this round has finished, but the results provider has")
+        print("no classification for it yet - predicting without a grid, exactly like")
+        print("a pre-quali run (the gain model needs a grid to anchor to). Run again")
+        print("later for the grid-anchored prediction.")
+        return upcoming, "prequali"
+    return upcoming, "pre"
+
+
 def collect_season(year, schedule, refresh=False, rate_limit_wait=None):
     return common.collect_season(
         year, schedule,
@@ -295,6 +319,8 @@ def predict_round(model, features, target_round, mode="gain", use_features=None)
     # (which always have a grid) exactly as before
     if mode == "gain" or rows["grid"].notna().any():
         rows = rows[rows["grid"].notna()]
+    if rows.empty:
+        raise ValueError(f"round {target_round} has no rows to predict")
     rows = rows.sort_values(["grid", "driver_number"])
     rows["model_output"] = model.predict(rows[use_features].to_numpy(dtype=float))
     if mode == "gain":
@@ -538,9 +564,10 @@ def final_report(features, year, target, event_name, mode, profile="fast", model
     rows = pred["gain"] if with_gain else pred["direct"]
     print(f"\n=== Prediction: {year} {event_name} (round {target}) ===")
     if mode == "prequali":
-        print("pre-quali mode: qualifying has not happened yet, so there is no grid to\n"
-              "anchor the gain model to - the direct model predicts the race alone,\n"
-              "from practice, sprint and season-form features\n")
+        print("no-grid mode: there is no grid to anchor the gain model to (qualifying\n"
+              "has not happened yet, or its results are not available from the data\n"
+              "provider yet) - the direct model predicts the race alone, from\n"
+              "practice, sprint and season-form features\n")
     elif mode == "pre":
         print("grid estimated from qualifying classification (grid penalties not applied)\n")
     if with_gain and with_direct:
@@ -721,7 +748,9 @@ def main():
         upcoming = load_upcoming_round_prequali(year, target, event_name, fallback)
         data = pd.concat([data[data["round"] != target], upcoming], ignore_index=True)
     elif mode == "pre":
-        upcoming = load_upcoming_round(year, target, event_name)
+        completed_rounds = sorted(data["round"].unique())
+        fallback = data[data["round"] == completed_rounds[-1]]
+        upcoming, mode = load_upcoming_round_checked(year, target, event_name, fallback)
         data = pd.concat([data[data["round"] != target], upcoming], ignore_index=True)
 
     features = build_features(data)
