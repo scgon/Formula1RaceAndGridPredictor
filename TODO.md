@@ -27,8 +27,8 @@
 
 ## Engineering
 
-- [ ] **Tests** — pytest for the pure helpers in `f1_common` (`rank_corr`, `usable_features`, `completed_rounds`, quali-lap extraction) and `predict_extras` (`_finished_like`, `baseline_pick`, single-class guards) on synthetic frames; no network needed.
-- [ ] **CI** — GitHub Actions running the tests + `--help` smoke tests + the AppTest page checks on push.
+- [x] **Tests** — pytest covers the pure helpers in `f1_common`, the three pipelines, bundled-data schemas, CLI `--help` smoke tests, and Streamlit AppTest page checks.
+- [x] **CI** — GitHub Actions runs the full pytest suite on pushes and pull requests for Python 3.12 and 3.14.
 - [ ] **Notebook sync** — generate the notebooks from the pipeline modules (or make them thin wrappers importing `pipelines/`) to end the manual cell-by-cell sync.
 - [ ] **Persist fitted models** — joblib cache keyed on data + params hash so identical re-runs skip retraining (biggest win for the optimized profile).
 - [ ] Parallelize the backtest across rounds (folds are independent) with joblib.

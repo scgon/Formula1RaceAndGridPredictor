@@ -328,7 +328,6 @@ The project includes a `TODO.md` with the active backlog, including ideas such a
 - cross-season training
 - better driver-change handling
 - ensemble / blended model strategy
-- tests and CI setup
 - persist fitted models to skip retraining
 
 The README is intentionally kept current with the codebase; the full backlog is tracked in [TODO.md](TODO.md).
