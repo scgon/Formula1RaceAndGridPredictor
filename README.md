@@ -2,6 +2,8 @@
 
 A Python project that predicts Formula 1 race results, qualifying grids, and weekend milestone outcomes using historical data from fastf1 and machine learning models built with scikit-learn.
 
+[![Tests](https://github.com/scgon/Formula1RaceAndGridPredictor/actions/workflows/tests.yml/badge.svg)](https://github.com/scgon/Formula1RaceAndGridPredictor/actions/workflows/tests.yml)
+
 Live app: https://formula1predictions.streamlit.app
 
 ## Overview
@@ -37,12 +39,16 @@ The app and the CLI both use the same shared data-loading and training logic, so
 │   └── grid_predictions.ipynb     # interactive qualifying pipeline notebook
 ├── scripts/
 │   └── refresh_data.py            # refresh tracked season CSVs
+├── tests/                         # pytest suite (unit, data schema, smoke, AppTest)
 ├── .github/workflows/
 │   ├── refresh-data.yml           # scheduled CSV refresh workflow
+│   ├── tests.yml                  # CI: runs the test suite on pushes and PRs
 │   └── opencode.yml               # optional /oc or /opencode comment workflow
 ├── data/                          # bundled season CSVs and team_colors.csv
 ├── cache/                         # fastf1 session cache (gitignored)
 ├── requirements.txt               # project dependencies
+├── requirements-dev.txt           # test dependencies (pytest)
+├── pytest.ini                     # pytest configuration (testpaths, slow marker)
 ├── AGENTS.md                      # environment and project operational notes
 ├── TODO.md                        # planned enhancements / future work
 ├── LICENSE                        # MIT license
@@ -68,8 +74,9 @@ This matters because fastf1 has a hard rate limit for uncached API calls. The pr
 
 ## Requirements
 
-- Python 3.10+ (tested on Python 3.14)
+- Python 3.10+ (tested on Python 3.14; CI runs the suite on 3.12 and 3.14)
 - Dependencies from `requirements.txt`
+- Test dependencies from `requirements-dev.txt` (only needed to run the test suite)
 
 Install:
 
@@ -258,7 +265,26 @@ when an issue or pull-request comment starts with, or contains, `/oc` or
 `/opencode`. It is read-only with respect to repository contents and requires
 the repository's configured `NVIDIA_API_KEY` secret.
 
-## Verification and local sanity checks
+## Tests, CI and verification
+
+The test suite is the primary verification tool:
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest tests                 # the whole suite, incl. the slow AppTest runs
+python -m pytest tests -m "not slow"   # fast offline subset (~15s)
+```
+
+It contains:
+
+- offline unit tests for the shared machinery and all three pipelines, run on synthetic frames (feature-engineering shifts, the all-NaN feature guard, target modes, milestone specs, end-to-end train/predict cycles)
+- schema checks over the bundled `data/*.csv`, reusing the same required-column definitions as the data-refresh workflow, so a schema change fails here exactly when it would force a season regeneration
+- CLI `--help` import smoke tests for all three pipelines
+- Streamlit AppTest runs: the homepage renders, plus one full Run per prediction page pinned to the last completed round (marked `slow`; these fetch the small season schedule, so they need network)
+
+CI (`.github/workflows/tests.yml`) runs the whole suite on pushes and pull requests to main, on a Python 3.12 + 3.14 matrix. Scheduled data-refresh commits use `[skip ci]` and do not trigger it.
+
+Ad-hoc checks, when a quick signal is enough:
 
 A lightweight import smoke test for the CLI entry points is:
 
@@ -268,7 +294,7 @@ python pipelines/predict_grid.py --help
 python pipelines/predict_extras.py --help
 ```
 
-A representative AppTest check for page rendering and button execution:
+A representative AppTest loop for page rendering and button execution (the permanent, round-pinned version lives in `tests/test_webapp_apptest.py`):
 
 ```bash
 python - <<'PY'
@@ -290,6 +316,8 @@ for page, run_key in (
     print(page, "OK")
 PY
 ```
+
+The loop uses the default auto target, which can transiently fail with a "Pipeline failed: ... 0 sample(s)" error right after a qualifying session whose results the provider hasn't ingested yet — retry later or pick a completed round in the target selectbox instead.
 
 Notebook verification:
 
