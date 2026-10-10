@@ -95,6 +95,7 @@ gain = result["main"]
 imp_gain = result["imp_main"]
 imp_direct = result["imp_direct"]
 colors = wc.team_colors(used_year)
+driver_team = wc.team_by_driver(features)  # driver -> team, latest row wins
 
 # --- header ----------------------------------------------------------------
 headline = f"{used_year} {event_name} — round {target}"
@@ -162,20 +163,23 @@ for col in ("Gain model", "Direct model", "Grid", "Actual"):
         styled = styled.map(wc.position_css, subset=[col])
 if mode == "post":
     styled = styled.map(wc.zero_error_css, subset=["Error (gain)", "Error (direct)"])
-styled = styled.map(lambda t: wc.team_css(t, colors, bold=True), subset=["Driver"])
-styled = styled.map(lambda t: wc.team_css(t, colors), subset=["Team"])
+styled = wc.style_driver_team_columns(styled, ordered, colors)
 st.dataframe(styled, width="stretch", hide_index=True)
 
 if mode == "prequali":
-    st.success(f"**Predicted podium (direct model):** {' · '.join(gain.head(3)['driver'])}")
+    st.success(f"**Predicted podium (direct model):** "
+               f"{wc.drivers_md(gain.head(3)['driver'], driver_team, colors)}")
 else:
     p1, p2 = st.columns(2)
-    p1.success(f"**Predicted podium (gain):** {' · '.join(gain.head(3)['driver'])}")
-    p2.success(f"**Predicted podium (direct):** {' · '.join(gain.sort_values('direct_pos').head(3)['driver'])}")
+    p1.success(f"**Predicted podium (gain):** "
+               f"{wc.drivers_md(gain.head(3)['driver'], driver_team, colors)}")
+    p2.success(f"**Predicted podium (direct):** "
+               f"{wc.drivers_md(gain.sort_values('direct_pos').head(3)['driver'], driver_team, colors)}")
 if mode == "post":
     actual_rows = features.loc[(features["round"] == target) & (features["finish"] <= 3)]
     actual_top3 = list(actual_rows.sort_values("finish")["driver"])
-    st.info(f"**Actual podium:** {' · '.join(actual_top3)}", icon=":material/emoji_events:")
+    st.info(f"**Actual podium:** {wc.drivers_md(actual_top3, driver_team, colors)}",
+            icon=":material/emoji_events:")
 
 # --- final predicted order diagram -----------------------------------------
 if mode == "prequali":
@@ -277,7 +281,6 @@ else:
     drivers = bt[["round", "event", "gain_top1", "direct_top1", "actual_top1"]].copy()
     drivers.columns = ["Round", "Event", "Predicted winner (gain)",
                        "Predicted winner (direct)", "Actual winner"]
-    driver_team = features.groupby("driver")["team"].last().to_dict()
 
     css_frame = pd.DataFrame("", index=drivers.index, columns=drivers.columns)
     for i, row in drivers.iterrows():

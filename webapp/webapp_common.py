@@ -732,6 +732,54 @@ def team_css(team, colors, bold=False):
     return css
 
 
+def team_by_driver(frame):
+    """driver -> team, taken from a frame's own driver/team rows. When a
+    driver appears in several rows (a whole season in `features`), the last
+    row wins — the driver's most recent team — matching the
+    `features.groupby("driver")["team"].last()` lookup the pages used to
+    build by hand."""
+    return dict(zip(frame["driver"], frame["team"]))
+
+
+def style_driver_team_columns(styled, frame, colors, bold_driver=True):
+    """Team-color the Driver and Team columns of a prediction table.
+
+    `frame` is the source frame the display table was built from: each
+    driver resolves through its own row's team (so a mid-season driver
+    swap keeps the right color), and the Team column is colored by its own
+    team-keyed value. One shared helper keeps every page consistent —
+    previously the race/quali pages passed the Driver cell straight into the
+    team-keyed color map and the extras page made the mirror mistake on the
+    Team column, so one of the two columns silently fell back to gray on
+    every page.
+    """
+    lookup = team_by_driver(frame)
+    styled = styled.map(
+        lambda driver: team_css(lookup.get(driver, ""), colors, bold=bold_driver),
+        subset=["Driver"])
+    styled = styled.map(lambda team: team_css(team, colors), subset=["Team"])
+    return styled
+
+
+def driver_md(driver, driver_teams, colors):
+    """One driver name as a markdown :color[...] directive in the driver's
+    team color (theme-adjusted like every other team color on the site).
+
+    Alert boxes (st.success / st.info) escape raw HTML, but the custom-color
+    markdown directive is processed at the markdown AST level and therefore
+    renders inside them too (streamlit >= 1.55, pinned in requirements.txt).
+    Boldness stays under the caller's control: wrap the returned text in
+    **...** for bold. `driver_teams`: driver -> team map (team_by_driver).
+    """
+    hex_color = readable_color(colors.get(driver_teams.get(driver, "")))
+    return f':color[{driver}]{{foreground="{hex_color}"}}'
+
+
+def drivers_md(drivers, driver_teams, colors, sep=" · "):
+    """Several driver names joined by sep, each in their team's color."""
+    return sep.join(driver_md(d, driver_teams, colors) for d in drivers)
+
+
 def bold_row_style(row):
     """Bold every cell of a row (for Total rows in points tables)."""
     return ["font-weight: 700"] * len(row)
@@ -789,3 +837,26 @@ def predicted_order_chart(rows, cut_lines, colors, slot_label="position"):
             x="position:Q", y=alt.Y("lane:N", sort=lane_order), text="label:N")
         return rules + lanes + cut_labels
     return lanes
+
+
+def probability_chart(table, colors, n=10, x_label="model probability"):
+    """Top-n driver probabilities as a horizontal bar chart, one bar per
+    driver in their team's color.
+
+    Native st.bar_chart colors every bar alike, so this mirrors the
+    team-color scale of predicted_order_chart; render it with
+    st.altair_chart(..., theme="streamlit"). table: the milestone model's
+    probability table (driver, team, probability), sorted by probability
+    descending (the top pick first) — the first driver renders as the top bar.
+    """
+    data = table.head(n)[["driver", "team", "probability"]].copy()
+    teams = list(dict.fromkeys(data["team"]))
+    scale = alt.Scale(domain=teams,
+                      range=[readable_color(colors.get(t, "#999999")) for t in teams])
+    return alt.Chart(data).mark_bar().encode(
+        y=alt.Y("driver:N", title=None, sort=list(data["driver"])),
+        x=alt.X("probability:Q", title=x_label, axis=alt.Axis(format="%")),
+        color=alt.Color("team:N", scale=scale, legend=None),
+        tooltip=["driver:N", "team:N",
+                 alt.Tooltip("probability:Q", format=".1%")],
+    ).properties(height=30 + 28 * len(data))
