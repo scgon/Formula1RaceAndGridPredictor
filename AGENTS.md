@@ -26,7 +26,7 @@
 │   └── webapp_common.py     # app-only glue (run_pipeline, run_extras_pipeline, stdout capture, table/chart helpers)
 ├── notebooks/               # inline copies of the order pipelines (manual sync)
 ├── scripts/refresh_data.py  # regenerates the bundled season CSVs + team_colors.csv (used by the workflow)
-├── .github/workflows/refresh-data.yml  # scheduled job keeping data/*.csv current
+├── .github/workflows/       # refresh-data.yml plus comment-triggered opencode.yml
 ├── data/  cache/            # season CSVs + team_colors.csv (tracked; kept current by the workflow) + fastf1 cache (gitignored)
 ├── requirements.txt  README.md  LICENSE
 └── TODO.md                  # ideas backlog — checked items are already implemented
@@ -54,6 +54,9 @@ Shared CLI flags: `--season YEAR`, `--predict-round N`, `--next` (next race/qual
 - **A bundled season's first run downloads nothing but newly completed rounds** (the season CSVs are tracked in the repo); an unbundled season's first run downloads ~45 fastf1 sessions (several minutes). After that `cache/` and `data/*.csv` make runs take ~3-4 min. A round that fails mid-download is skipped and retried on the next run.
 - Always run with `-u`; do not pipe output through `head` — block buffering makes long jobs look stalled.
 - Under system load (e.g. a PyCharm Jupyter kernel is running), cap threads: `OMP_NUM_THREADS=4`.
+- The optional `.github/workflows/opencode.yml` workflow responds to issue and
+  pull-request comments containing `/oc` or `/opencode`; do not invoke it
+  locally or add its provider secret to the repository.
 
 ## Architecture
 
@@ -149,4 +152,4 @@ Takes ~5-10 min (re-runs backtest + charts). The notebooks must finish with no c
 - Remote: `https://github.com/scgon/Formula1RaceAndGridPredictor.git`, branch `main`; `git push origin main` works (credentials configured).
 - The web app is publicly hosted at https://formula1predictions.streamlit.app — treat the UI as user-facing: changes pushed to the repo can end up visible there.
 - `pipelines/predict_race.py --help` is the cheap import/argparse smoke test (~2s) when you only need to confirm the code loads.
-- Do not push to the GitHub Repo unless prompted to
+- Do not push to the GitHub Repo unless prompted.

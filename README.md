@@ -38,8 +38,9 @@ The app and the CLI both use the same shared data-loading and training logic, so
 ├── scripts/
 │   └── refresh_data.py            # refresh tracked season CSVs
 ├── .github/workflows/
-│   └── refresh-data.yml           # scheduled CSV refresh workflow
-├── data/                          # bundled season CSVs used by the project
+│   ├── refresh-data.yml           # scheduled CSV refresh workflow
+│   └── opencode.yml               # optional /oc or /opencode comment workflow
+├── data/                          # bundled season CSVs and team_colors.csv
 ├── cache/                         # fastf1 session cache (gitignored)
 ├── requirements.txt               # project dependencies
 ├── AGENTS.md                      # environment and project operational notes
@@ -53,9 +54,15 @@ The app and the CLI both use the same shared data-loading and training logic, so
 The project uses fastf1 historical data plus a local cache layer:
 
 - `data/*.csv` contains tracked season data bundled with the repo
+- `data/team_colors.csv` contains tracked per-season team colors used first by
+  the web app, so cold containers can render team-colored tables and charts
+  without downloading a race session
 - `cache/` stores downloaded fastf1 session data for faster future runs
 - `scripts/refresh_data.py` regenerates or updates bundled CSVs when needed
 - The GitHub workflow in `.github/workflows/refresh-data.yml` refreshes the bundled data on a schedule and on code pushes
+- The web app re-fetches the small event schedule at most every 12 hours rather
+  than pinning it for the process lifetime. If a refresh fails, it serves the
+  last good schedule and retries on a later rerun.
 
 This matters because fastf1 has a hard rate limit for uncached API calls. The project treats rate-limit exhaustion as a soft stop: fetched rounds are saved, and the next run resumes from where it left off. The data refresh flow is designed to avoid cold-start bulk downloads from a live app container.
 
@@ -239,9 +246,16 @@ App details:
 - The app shows live model-training logs for each round and each model
 - Review mode sorts by actual result; prediction mode sorts by model prediction
 - Driver and team names are color-coded by team, with readable theme-aware contrast adjustments for both dark and light modes
+- The extras probability table uses a theme-aware blue heat map; dark mode
+  uses a stronger, lighter ramp so probabilities remain readable
 - Prediction pages also include feature-importance charts and point-based summaries for podium/pole scoring
 
 The code includes a stale-module guard inside `webapp/_bootstrap.py` to keep the app healthy after a live code pull on Streamlit Community Cloud, where new code can be pulled into an already-running app process without restarting Python.
+
+For repository automation, `.github/workflows/opencode.yml` can run OpenCode
+when an issue or pull-request comment starts with, or contains, `/oc` or
+`/opencode`. It is read-only with respect to repository contents and requires
+the repository's configured `NVIDIA_API_KEY` secret.
 
 ## Verification and local sanity checks
 
@@ -290,6 +304,9 @@ These notebook runs take longer because the backtests and charts execute end-to-
 - A bundled season normally downloads only newly completed rounds
 - A brand-new season can still require a full download of many sessions
 - The project is intentionally built to keep bundled CSVs current so live web-app users do not hit the API limit on cold starts
+- The refresh script updates `data/team_colors.csv` from the latest completed
+  round's team colors as a best-effort operation; a failed lookup preserves
+  the existing bundled rows
 - The refresh script and workflow are designed to handle seasonal schema changes and to resume partial downloads cleanly
 
 Important notes:
