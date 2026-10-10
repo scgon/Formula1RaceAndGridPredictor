@@ -40,4 +40,4 @@
 - [ ] Predict championship points instead of raw positions — aligns model error with what actually matters.
 - [ ] Multi-season backtest report (e.g. 2018–2026) to test feature robustness across regulation eras.
 - [ ] Driver championship-position feature (title pressure / consistency signals).
-- [ ] Calibrated "podium probability" per driver from backtest residuals.
+- [x] Calibrated "podium probability" per driver — done as the podium milestone classifier of the extras pipeline (`--milestone podium` scores every driver's top-three chance via `predict_proba`); residual-based calibration of the position models remains unexplored.

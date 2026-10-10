@@ -10,7 +10,7 @@ This project combines three independent prediction pipelines with a Streamlit we
 
 - Race prediction: predict finishing positions for an upcoming or completed race
 - Grid prediction: predict qualifying positions for an upcoming or completed qualifying session
-- Milestone predictions: predict one selected target per run, such as pole sitter, race winner, first retirement, fastest lap, sprint pole, or sprint winner
+- Milestone predictions: predict one selected target per run, such as pole sitter, race winner, race podium (top-three finish), first retirement, fastest lap, sprint pole, or sprint winner
 
 The app and the CLI both use the same shared data-loading and training logic, so results stay consistent across interfaces.
 
@@ -126,7 +126,7 @@ Common flags:
 --season YEAR
 --predict-round N
 --next
---milestone {pole,winner,first_dnf,fastest_lap,sprint_pole,sprint_win}
+--milestone {pole,winner,podium,first_dnf,fastest_lap,sprint_pole,sprint_win}
 --model {fast,optimized}
 --models {both,gain,direct}      # race pipeline
 --models {both,anchor,direct}    # grid pipeline
@@ -173,6 +173,7 @@ Supported milestones:
 
 - pole
 - winner
+- podium
 - first_dnf
 - fastest_lap
 - sprint_pole
@@ -215,7 +216,7 @@ Grid features include:
 Milestone features vary by target:
 
 - pole model: day-before-qualifying style information set
-- race winner / first retirement / fastest lap: pre-race data plus reliability and milestone history
+- race winner / podium / first retirement / fastest lap: pre-race data plus reliability and milestone history
 - sprint-pole and sprint-win models: sprint-weekend chronology and sprint prior performance
 
 The project is careful about unsupported/NaN feature columns: if a training split has a column with all NaN values, the training logic drops it rather than crashing, which is critical for early-round training and for pre-session predictions.
