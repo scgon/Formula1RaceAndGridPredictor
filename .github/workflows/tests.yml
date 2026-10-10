@@ -1,0 +1,39 @@
+name: Tests
+
+# The offline pytest suite (tests/) — unit tests for the shared machinery
+# and pipeline helpers, schema checks for the bundled data/*.csv, CLI
+# --help import smoke tests and Streamlit AppTest runs (home page render +
+# one full Run per prediction page on a pinned completed round, which
+# resolves from the bundled CSVs and downloads nothing but the schedule).
+# The heavy AppTests carry the "slow" pytest marker; see AGENTS.md.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.12 mirrors the refresh-data workflow; 3.14 is the local dev env
+        python-version: ["3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Run tests
+        run: python -m pytest tests -v --durations=10

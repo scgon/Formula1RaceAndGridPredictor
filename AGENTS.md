@@ -5,7 +5,7 @@
 - **Interpreter**: `/opt/homebrew/Caskroom/miniconda/base/bin/python` (Python 3.14, all deps installed). Do NOT rely on `python3` from PATH — on a fresh shell it can resolve to macOS system Python, which has none of the packages. PyCharm uses this same miniconda SDK.
 - **GitHub CLI**: `/opt/homebrew/bin/gh` (authenticated as `scgon`); often not on PATH.
 - **Feature worktrees**: new features are usually developed in sibling git worktrees (`git worktree add ../Formula1RaceAndGridPredictor-<name> -b <branch>`). A worktree checks out its own tracked `data/*.csv` (bundled seasons need no re-download) but starts with a **cold fastf1 cache** — `cache/` is gitignored. To share the main checkout's ~1 GB of downloaded sessions, symlink it: `ln -s <main-repo>/cache cache`. Gotcha: a `cache` *symlink* shows as untracked in `git status` (the `cache/` ignore pattern matches directories only) — never `git add -A` over it; drop the symlink when the worktree is retired.
-- No tests, lint, or typecheck exist. Verification = a full script run (pipelines), an AppTest run (web app), or a CLI-output parity diff (pipeline edits).
+- The pytest suite in `tests/` is the primary verification (deps in `requirements-dev.txt`; see Commands and the Tests section). No lint or typecheck exists. Deeper verification = a full script run (pipelines) or a CLI-output parity diff (pipeline edits).
 
 ## File layout
 
@@ -26,9 +26,10 @@
 │   └── webapp_common.py     # app-only glue (run_pipeline, run_extras_pipeline, stdout capture, table/chart helpers)
 ├── notebooks/               # inline copies of the order pipelines (manual sync)
 ├── scripts/refresh_data.py  # regenerates the bundled season CSVs + team_colors.csv (used by the workflow)
-├── .github/workflows/refresh-data.yml  # scheduled job keeping data/*.csv current
+├── tests/                   # pytest suite (see Tests below)
+├── .github/workflows/       # refresh-data.yml (scheduled data refresh) + tests.yml (CI) + comment-triggered opencode.yml
 ├── data/  cache/            # season CSVs + team_colors.csv (tracked; kept current by the workflow) + fastf1 cache (gitignored)
-├── requirements.txt  README.md  LICENSE
+├── pytest.ini  requirements.txt  requirements-dev.txt  README.md  LICENSE
 └── TODO.md                  # ideas backlog — checked items are already implemented
 ```
 
@@ -47,6 +48,8 @@ $PY -u pipelines/predict_extras.py # milestone pick — one model per run (--mil
 $PY -m streamlit run app.py        # web app (homepage + one page per pipeline)
 $PY scripts/refresh_data.py        # refresh the bundled season CSVs (default: previous + current season)
                                     # bulk-generate seasons: --years 2018 2019 ... --wait-on-limit
+$PY -m pytest tests                # the test suite (all of it, incl. the slow AppTest runs)
+$PY -m pytest tests -m "not slow"  # fast offline subset: unit + schema + smoke (no pipeline runs)
 ```
 
 Shared CLI flags: `--season YEAR`, `--predict-round N`, `--next` (next race/quali on the calendar), `--refresh` (re-download season data), `--min-train-rounds N`, `--model {fast,optimized}` (model profile, see below), `--models` (which models the race/quali pipeline trains — `both` (default), `gain`/`anchor`, or `direct`; a pre-quali race target always falls back to `direct`), and the output-level pair `-q/--quiet` + `-v/--verbose` (see the verbosity bullet in Architecture).
@@ -54,6 +57,19 @@ Shared CLI flags: `--season YEAR`, `--predict-round N`, `--next` (next race/qual
 - **A bundled season's first run downloads nothing but newly completed rounds** (the season CSVs are tracked in the repo); an unbundled season's first run downloads ~45 fastf1 sessions (several minutes). After that `cache/` and `data/*.csv` make runs take ~3-4 min. A round that fails mid-download is skipped and retried on the next run.
 - Always run with `-u`; do not pipe output through `head` — block buffering makes long jobs look stalled.
 - Under system load (e.g. a PyCharm Jupyter kernel is running), cap threads: `OMP_NUM_THREADS=4`.
+
+## Tests
+
+`tests/` boots `sys.path` like the pages do (`conftest.py` adds the repo root + `pipelines/` + `webapp/` + `scripts/`), so tests import the modules the same way the app resolves them.
+
+- `test_f1_common.py` — offline unit tests for the shared machinery: verbosity gating, UTC/session helpers, the 3-hour completion buffer, quali-lap extraction, the model factory, the hyperparameter tuner (determinism + the min-improvement rule) and `collect_season` (cache reuse, rate-limit soft stop, empty-result skips — with `DATA_DIR` monkeypatched to a tmp_path and stub loaders).
+- `test_race_pipeline.py` / `test_grid_pipeline.py` / `test_extras_pipeline.py` — per-pipeline unit tests on synthetic frames: the one-round `shift(1)` feature engineering, the all-NaN `usable_features` guard, anchor/baseline fallbacks, `TARGETS` spec invariants, sprint-weekend gating and small end-to-end train+predict cycles (including the race pre-quali direct-only path).
+- `test_webapp_common.py` — the pure UI glue: `capture_stdout` nesting, the schedule TTL cache's serve-cached/fail-open paths (fetch monkeypatched), team-color helpers, the WCAG `readable_color`/CSS functions and offline Altair chart compilation.
+- `test_data_bundle.py` — schema checks over the tracked `data/*.csv`, reusing `refresh_data.required_columns` so a pipeline schema change fails here exactly when it would force a season regeneration; also catches a truncated round or a malformed team color (this is how the bundled `#nan` Haas 2021 color was found and repaired).
+- `test_cli_smoke.py` — `--help` for all three pipelines (the cheap import smoke test).
+- `test_webapp_apptest.py` — AppTest: the homepage renders, plus one **slow** full Run per prediction page on the **last completed round** (round 1 can never be predicted — no training data before it; the label is picked from the target selectbox options). These runs resolve from the bundled CSVs but fetch the season schedule (one tiny call), so they need network — everything else in the suite is offline.
+
+CI: `.github/workflows/tests.yml` runs the whole suite on pushes/PRs to main on a Python 3.12 + 3.14 matrix (data-refresh commits say `[skip ci]`, so they don't trigger it). Locally, `-m "not slow"` gives the ~15s offline subset.
 
 ## Architecture
 
@@ -96,6 +112,7 @@ Shared CLI flags: `--season YEAR`, `--predict-round N`, `--next` (next race/qual
 - The event schedule is a **static, community-maintained file** fastf1 downloads from `theOehrly/f1schedule` on raw.githubusercontent.com — it is corrected after the fact once the calendar firms up (a round's sprint sessions can appear in it weeks into the season; fastf1's own HTTP cache keeps it only 12h and GitHub serves it with `max-age=300`). Any long-lived process pinning an old copy therefore misclassifies sprint weekends — `predict_extras.is_sprint_weekend` keys on the session names `Sprint`/`Sprint Qualifying`. This bit the hosted app (Singapore 2026 round 17: sprint pole/winner gated off a pre-correction `@st.cache_resource` pin); the fix is the `webapp_common.get_schedule` TTL cache. CLI runs are safe — every run is a fresh process fetching through the short-lived HTTP cache.
 - Schedule `Session*DateUtc` values are **tz-naive** despite the name.
 - Race results `Position` includes retirees (timing position); DNS rows are NaN. 2026 status values are `Finished`/`Lapped`/`Retired`/`Did not start` — not the old `+1 Lap` format.
+- Session results can carry **glitched `TeamColor` cells** (the literal string `'nan'` for Haas in Abu Dhabi 2021) — `f1_common.season_team_colors` therefore only accepts well-formed hex values; the unfiltered lookup once bundled `#nan` into `data/team_colors.csv` and rendered Haas gray everywhere (found by `tests/test_data_bundle.py`, repaired alongside it).
 - A round only counts as "completed" **3 hours after its race start** (`COMPLETION_BUFFER`), so a run during a live race never caches partial results.
 - **fastf1 hard-stops at 500 uncached API calls/hour** (`RateLimitExceededError` raised by its own request limiter; cache-served requests are free, and the pace is capped at 4 calls/s anyway — so the *count* of distinct downloads matters, never the speed; once the hourly budget is blown, subsequent collection crawls until the window rolls over — budget already spent is not recoverable, so batch work right after a rate-limited run can look "hung" while it is really throttled). This is why `data/*.csv` are tracked and kept current by the scheduled `refresh-data` workflow (`scripts/refresh_data.py`, every 6h + on pipeline-code pushes): the app is hosted on Streamlit Community Cloud, whose containers hibernate after 12h without traffic and lose all non-repo disk on restart — without bundled CSVs every cold start bulk-downloads whole seasons and slams into the limit. The bundled `data/team_colors.csv` exists for the same reason: it is the only cold-start-free source of team colors, since even a single extra race-session download for the old live color lookup failed once the process's budget was spent (gray app; see the Team colors note above). `collect_season` treats the limit as a soft stop (fetched rounds are saved; the rest resume on the next run) and takes an optional `rate_limit_wait` (used by the refresh script's `--wait-on-limit`) to sleep and retry instead. The refresh script's `missing_rounds` also detects **stale CSV schemas** (missing required columns → full regeneration, so a pipeline schema change rewrites every bundled season it is run for) and collects the extras kind only for the default years (previous + current) or years that already have an extras CSV — never as a side effect of `--years` on a season that was never bundled. The web-app Season selectbox only offers bundled years (plus the year after the last bundled one as a next-season preview) so visitors can't trigger bulk downloads; the CLI `--season` flag stays unrestricted.
 
@@ -125,7 +142,7 @@ for page, run_key in (("webapp/page_home.py", None),
 EOF
 ```
 
-Run from the repo root (the snippet's relative `AppTest.from_file` paths resolve against the cwd of the stdin script); from any other cwd pass absolute paths — the gotcha below applies.
+Run from the repo root (the snippet's relative `AppTest.from_file` paths resolve against the cwd of the stdin script); from any other cwd pass absolute paths — the gotcha below applies. The permanent version of this lives in `tests/test_webapp_apptest.py` (pinned to a completed round; the snippet below is handy for ad-hoc checks with the default auto target).
 
 - Prediction pages execute the full backtest + importance when **Run prediction** is pressed (~1-3 min with cached data under the fast profile; the optimized profile takes several times longer). A real browser check is `$PY -m streamlit run app.py --server.headless true` and `curl localhost:8501/healthz`.
 - AppTest gotchas (learned the hard way):
