@@ -163,7 +163,12 @@ else:
     }).reset_index(drop=True)
     fmt = {"Probability": "{:.1%}"}
     if pred["actual"]:
-        disp["Achieved"] = table["driver"].isin(pred["actual"]).map({True: "yes", False: ""})
+        # positional assignment (like the race/quali pages): `table` still
+        # carries the season frame's row labels while `disp` was reset to
+        # 0..n-1, and a Series assignment aligns by label — without .to_numpy()
+        # every cell lands NaN and the column renders blank.
+        achieved = table["driver"].isin(pred["actual"]).map({True: "yes", False: ""})
+        disp["Achieved"] = achieved.to_numpy()
         fmt["Achieved"] = lambda v: "" if pd.isna(v) or v == "" else str(v)
 
     styled = disp.style.format(fmt, na_rep="")
