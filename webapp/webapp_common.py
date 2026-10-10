@@ -118,11 +118,44 @@ def capture_stdout(log_element=None, refresh_secs=0.3):
 # cached lookups (no elements, no downloads of session data)
 # ---------------------------------------------------------------------------
 
-@st.cache_resource(show_spinner=False)
+# How long a fetched event schedule stays fresh, in seconds. fastf1 downloads
+# the schedule from a static, community-maintained file (theOehrly/f1schedule)
+# that is corrected after the fact once the real calendar firms up — a round's
+# sprint sessions can appear there only weeks into the season. The hosted
+# app's process lives for days (live code pulls do not restart it), so a
+# schedule pinned for the process lifetime goes silently stale: the cloud app
+# once kept rejecting a round as "not a sprint weekend" that the updated
+# schedule clearly marked as one, while local runs — always a fresh process —
+# saw the correction.
+SCHEDULE_TTL = 12 * 3600
+_schedule_cache = {}  # year -> [schedule, time.monotonic() of the fetch]
+
+
 def get_schedule(year):
+    """Season event schedule, re-fetched at most every SCHEDULE_TTL seconds.
+
+    Deliberately not @st.cache_resource: that pins the frame for the whole
+    process lifetime with no way to refresh (see SCHEDULE_TTL above). This
+    module-level TTL cache instead re-downloads the (single, tiny) schedule
+    file when the entry ages out — one API call, far below the rate limit —
+    and serves the last good copy if that refresh fails (rate limit, network),
+    retrying on the next rerun instead of erroring the page. It raises only
+    when there is no copy to fall back on.
+    """
+    now = time.monotonic()
+    cached = _schedule_cache.get(year)
+    if cached is not None and now - cached[1] < SCHEDULE_TTL:
+        return cached[0]
     import fastf1
     f1_common.setup()
-    return fastf1.get_event_schedule(year, include_testing=False)
+    try:
+        schedule = fastf1.get_event_schedule(year, include_testing=False)
+    except Exception:
+        if cached is None:
+            raise
+        return cached[0]
+    _schedule_cache[year] = [schedule, now]
+    return schedule
 
 
 @st.cache_resource(show_spinner=False)
