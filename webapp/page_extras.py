@@ -49,13 +49,13 @@ with st.sidebar:
     year, force_refresh, reload_pressed = wc.season_inputs(KIND)
     milestone_label = st.selectbox(
         "Milestone", list(MILESTONE_OPTIONS), key=f"{KIND}_milestone",
-        help="Which of the four milestone models to run — only this one is "
+        help="Which of the six milestone models to run — only this one is "
              "trained and backtested.")
     milestone = MILESTONE_OPTIONS[milestone_label]
     spec = predict_extras.TARGETS[milestone]
     schedule = wc.get_schedule(year)
     completed = wc.completed_round_numbers(schedule)
-    selection = wc.target_selectbox(KIND, schedule, set(completed))
+    selection = wc.target_selectbox(KIND, schedule, set(completed), milestone)
     min_train = wc.first_backtest_control(KIND, completed)
     profile = wc.model_profile_input(KIND)
     run_pressed = st.button("Run prediction", type="primary", key=f"{KIND}_run",

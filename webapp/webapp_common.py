@@ -463,18 +463,36 @@ def season_inputs(kind):
     return int(year), force_refresh, reload_pressed
 
 
-def target_selectbox(kind, schedule, completed_rounds):
-    """Round selector. Returns None (auto), "next", or a round number."""
+def target_selectbox(kind, schedule, completed_rounds, milestone=None):
+    """Round selector. Returns None (auto), "next", or a round number.
+
+    For the sprint milestones only sprint weekends are listed (the sprint
+    models have nothing to predict anywhere else), and "Next on the
+    calendar" is offered only while the next upcoming round is one of
+    them."""
     label = {"race": "Target race", "grid": "Target qualifying",
              "extras": "Target weekend"}[kind]
-    options = {"Auto (recommended)": None, "Next on the calendar": "next"}
-    for _, row in schedule.iterrows():
+    rounds_schedule = schedule
+    show_next = True
+    help_text = ("Auto follows the same logic as the CLI: predict the next "
+                 "event if it can be predicted, otherwise review the last completed round.")
+    if kind == "extras" and (milestone or "").startswith("sprint_"):
+        rounds_schedule = schedule[schedule.apply(predict_extras.is_sprint_weekend, axis=1)]
+        help_text += (" Sprint milestones exist on sprint weekends only, so just those "
+                      "are listed.")
+        now = f1_common.utc_now()
+        upcoming = [row for _, row in schedule.iterrows()
+                    if (f1_common.session_utc(row, "Race") or now) > now]
+        show_next = bool(upcoming) and predict_extras.is_sprint_weekend(upcoming[0])
+    options = {"Auto (recommended)": None}
+    if show_next:
+        options["Next on the calendar"] = "next"
+    for _, row in rounds_schedule.iterrows():
         rn = int(row["RoundNumber"])
         state = "completed" if rn in completed_rounds else "upcoming"
         options[f"Round {rn} — {row['EventName']} ({state})"] = rn
     choice = st.selectbox(label, list(options), key=f"{kind}_target",
-                          help="Auto follows the same logic as the CLI: predict the next "
-                               "event if it can be predicted, otherwise review the last completed round.")
+                          help=help_text)
     return options[choice]
 
 

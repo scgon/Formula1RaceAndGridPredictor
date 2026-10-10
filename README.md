@@ -79,6 +79,7 @@ The race pipeline runs in three modes: it reviews completed rounds (`post`), pre
 - Pole model: the grid pipeline's original day-before-quali set (FP1/FP2, sprint quali, quali form)
 - Race milestone models (winner / first retirement / fastest lap): same pre-race information as the race pipeline, plus driver/team reliability (DNF rates) and milestone history (wins, fastest laps, retirements so far)
 - Sprint models (sprint pole / sprint winner): pre-sprint information — FP1, past sprint and quali form; the sprint winner additionally uses the weekend's sprint quali result. They exist on sprint weekends only (~5 per season), and their targets are derived from the stored sprint quali/race results
+- The pole model and the two sprint models also predict *before* qualifying runs (their information never includes the target round's qualifying; the sprint sessions happen before qualifying on sprint weekends), with sprint results scored as soon as their session has run. The race milestones keep requiring the grid, and the target list for the sprint milestones only offers sprint weekends
 - First-retirement and fastest-lap targets come from race lap data, so this pipeline keeps its own season CSVs (`data/extras_season_*.csv`; currently bundled for 2025–2026)
 
 ## Web App

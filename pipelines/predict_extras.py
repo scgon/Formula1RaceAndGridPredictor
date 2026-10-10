@@ -23,7 +23,11 @@ The sprint models (sprint pole / sprint winner) use pre-sprint-qualifying
 information (FP1, past sprint and quali form) and pre-sprint-race
 information (FP1 plus the sprint quali result) respectively, and exist on
 sprint weekends only — their targets are derived from the stored
-sprint_quali_pos / sprint_finish columns, so no CSV schema change. The
+sprint_quali_pos / sprint_finish columns, so no CSV schema change. Both
+sprint sessions happen before the weekend's Grand Prix qualifying, so the
+sprint models also run in prequali mode there (sprint results merge into
+the pre-quali frame once those sessions have run, so a post-sprint-quali
+call is already scored). The
 first-retirement and fastest-lap targets are derived from race lap data,
 which neither of the other two pipelines collects, so this pipeline keeps
 its own season CSV (extras_season_{year}.csv).
@@ -255,6 +259,9 @@ TARGETS = {
         "column": "sprint_pole",
         "rows_column": "sprint_quali_pos",
         "train_columns": ("sprint_quali_pos",),
+        # the sprint sessions happen before the weekend's Grand Prix
+        # qualifying, so both sprint models can also predict before it
+        "prequali": True,
         "features": SPRINT_POLE_FEATURES,
         "baseline_sort": (("sprint_quali_form_season", True), ("quali_form_season", True), ("driver_number", True)),
         "baseline_note": "best previous sprint-quali form, then best season quali form",
@@ -265,6 +272,7 @@ TARGETS = {
         "column": "sprint_win",
         "rows_column": "sprint_quali_pos",
         "train_columns": ("sprint_finish",),
+        "prequali": True,
         "features": SPRINT_WIN_FEATURES,
         "baseline_sort": (("sprint_quali_pos", True), ("driver_number", True)),
         "baseline_note": "the sprint pole sitter (sprint grid P1)",
@@ -707,13 +715,17 @@ def tune_classifier(X, y, rounds, categorical_features=None,
 
 def target_rows(features, round_number, name):
     """Rows of one round a model predicts over: quali participants for the
-    pole model, drivers with a grid slot for the race milestones. A
-    pre-quali pole target has no quali positions yet, so the pole model
-    scores every entrant of the round instead."""
+    pole model, sprint-quali participants for the sprint models, drivers
+    with a grid slot for the race milestones. A pre-quali target has no
+    quali positions at all, so a prequali-capable milestone scores every
+    entrant of the round instead; completed rounds without candidates
+    (a non-sprint weekend for the sprint models) stay empty and surface
+    the 'sprint weekends only' error."""
     spec = TARGETS[name]
     rows = features[features["round"] == round_number]
     eligible = rows[rows[spec["rows_column"]].notna()]
-    if eligible.empty and spec.get("prequali"):
+    if (eligible.empty and spec.get("prequali")
+            and rows["quali_pos"].isna().all()):
         return rows
     return eligible
 
@@ -993,8 +1005,9 @@ def final_report(features, year, target, event_name, mode, profile="fast", miles
         print(f"pre-race mode: the {spec['label'].lower()} is already decided (it happens "
               "before the race), so the model's call is scored below")
     if mode == "prequali":
-        print("pre-quali mode: qualifying has not happened yet, so this model predicts from")
-        print("practice, sprint qualifying and season form — run again after qualifying to score it")
+        print("pre-quali mode: the weekend's qualifying has not happened yet, so this model")
+        print("predicts from practice, sprint and season-form information — run again later")
+        print("in the weekend to score the call")
     if "error" in pred:
         print(f"\nNo model — {pred['error']}")
         return pred
@@ -1025,10 +1038,29 @@ def practice_done_by(row, now):
     return False
 
 
+def is_sprint_weekend(row):
+    """Whether the schedule row's weekend has sprint sessions (fastf1
+    names them 'Sprint' and 'Sprint Qualifying') — the sprint models can
+    only ever be trained or scored on these weekends."""
+    return any(row.get(f"Session{i}") in ("Sprint", "Sprint Qualifying")
+               for i in range(1, 6))
+
+
 def _prequali_note(row, now):
     if not practice_done_by(row, now):
-        print(f"\nNo practice sessions have finished yet, so the pole model relies on")
+        print(f"\nNo practice sessions have finished yet, so the model relies on")
         print("season form only - run again after practice (or qualifying) for sharper predictions")
+
+
+def _upcoming_quali_mode(row, now):
+    """(round, mode, event) for an upcoming weekend a pre-quali-capable
+    milestone predicts: 'pre' once its qualifying has run, 'prequali'
+    before that (with the no-practice note when needed)."""
+    quali_utc = session_utc(row, "Qualifying")
+    if quali_utc is not None and quali_utc < now:
+        return int(row["RoundNumber"]), "pre", str(row["EventName"])
+    _prequali_note(row, now)
+    return int(row["RoundNumber"]), "prequali", str(row["EventName"])
 
 
 def resolve_target(args, year, schedule, data):
@@ -1042,21 +1074,33 @@ def resolve_target(args, year, schedule, data):
         if race_utc is not None and race_utc > now:
             upcoming.append(row)
 
-    # only the pole model can run before a round's qualifying (its feature
-    # set never includes the target round's qualifying); the race
-    # milestones need the grid and keep requiring quali to be done
+    # which milestones can run before a round's qualifying: the pole model
+    # on any weekend (its feature set never includes the target round's
+    # qualifying) and the sprint models on sprint weekends, where both
+    # sprint sessions happen before qualifying. The race milestones need
+    # the grid and keep requiring quali to be done.
     milestone = getattr(args, "milestone", None) or "pole"
     prequali_ok = bool(TARGETS[milestone].get("prequali"))
+    sprint_only = milestone.startswith("sprint_")
 
     if args.next:
         if not upcoming:
             raise SystemExit("no upcoming race left on this season's calendar")
         row = upcoming[0]
+        if sprint_only and not is_sprint_weekend(row):
+            sprints = [r for r in upcoming if is_sprint_weekend(r)]
+            if sprints:
+                nxt = sprints[0]
+                raise SystemExit(
+                    f"the next round ({row['EventName']}) is not a sprint weekend - the "
+                    f"next sprint weekend is round {int(nxt['RoundNumber'])} "
+                    f"({nxt['EventName']}), use --predict-round {int(nxt['RoundNumber'])}")
+            raise SystemExit(f"the next round ({row['EventName']}) is not a sprint weekend "
+                             "and none is left on this season's calendar")
+        if prequali_ok:
+            return _upcoming_quali_mode(row, now)
         quali_utc = session_utc(row, "Qualifying")
         if quali_utc is None or quali_utc > now:
-            if prequali_ok:
-                _prequali_note(row, now)
-                return int(row["RoundNumber"]), "prequali", str(row["EventName"])
             raise SystemExit(f"qualifying for the {row['EventName']} has not happened yet, retry after quali")
         return int(row["RoundNumber"]), "pre", str(row["EventName"])
 
@@ -1072,6 +1116,9 @@ def resolve_target(args, year, schedule, data):
             if rn in completed:
                 return rn, "post", str(row["EventName"])
             raise SystemExit(f"round {rn} happened recently but is not in the cache yet, retry in a few hours")
+        if sprint_only and not is_sprint_weekend(row):
+            raise SystemExit(f"round {rn} ({row['EventName']}) is not a sprint weekend - "
+                             "the sprint models have nothing to predict")
         if quali_utc is not None and quali_utc < now:
             return rn, "pre", str(row["EventName"])
         if prequali_ok:
@@ -1081,6 +1128,28 @@ def resolve_target(args, year, schedule, data):
 
     if upcoming:
         row = upcoming[0]
+        if sprint_only:
+            # the sprint models skip non-sprint weekends entirely: predict
+            # the next sprint weekend, or review the last completed sprint
+            # round once none is left on the calendar
+            sprints = [r for r in upcoming if is_sprint_weekend(r)]
+            if sprints:
+                srow = sprints[0]
+                if int(srow["RoundNumber"]) != int(row["RoundNumber"]):
+                    print(f"\nThe next round ({row['EventName']}) is not a sprint weekend,")
+                    print("so the sprint models jump to the next sprint weekend on the calendar")
+                return _upcoming_quali_mode(srow, now)
+            sprint_done = data.loc[data["sprint_quali_pos"].notna(), "round"]
+            if not sprint_done.empty:
+                last = int(sprint_done.max())
+                last_event = str(data.loc[data["round"] == last, "event"].iloc[0])
+                print(f"\nNo sprint weekend is left on the {year} calendar,")
+                print("so the sprint models demonstrate on the last completed sprint round instead")
+                return last, "post", last_event
+            last_event = str(data.loc[data["round"] == completed[-1], "event"].iloc[0])
+            print(f"\nNo sprint weekend is left or completed in the {year} season yet,")
+            print("so the sprint models demonstrate on the last completed round instead")
+            return completed[-1], "post", last_event
         quali_utc = session_utc(row, "Qualifying")
         if quali_utc is not None and quali_utc < now:
             print(f"\nNext round ({row['EventName']}) has qualifying done -> predicting its milestones")
@@ -1110,8 +1179,8 @@ def main():
                         help="round number to predict (default: auto-select)")
     parser.add_argument("--next", action="store_true",
                         help="predict the next race weekend's milestones (the race milestones "
-                             "require its qualifying to be done; the pole model also predicts "
-                             "before qualifying)")
+                             "require its qualifying to be done; the pole and sprint models "
+                             "also predict before it)")
     parser.add_argument("--min-train-rounds", type=int, default=MIN_TRAIN_ROUNDS,
                         help="minimum completed rounds needed before first prediction (default: 5)")
     parser.add_argument("--milestone", choices=list(TARGETS), default="pole",
