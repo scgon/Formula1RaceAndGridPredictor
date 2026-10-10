@@ -317,7 +317,7 @@ for page, run_key in (
 PY
 ```
 
-The loop uses the default auto target, which can transiently fail with a "Pipeline failed: ... 0 sample(s)" error right after a qualifying session whose results the provider hasn't ingested yet — retry later or pick a completed round in the target selectbox instead.
+The loop uses the default auto target. Even right after a qualifying session whose results the provider has not ingested yet, it still renders a prediction: such a round downgrades to a pre-quali-style direct-model run (with a printed note) until the classification is available — run again later for the grid-anchored prediction.
 
 Notebook verification:
 
