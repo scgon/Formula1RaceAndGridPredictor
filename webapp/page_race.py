@@ -101,7 +101,9 @@ driver_team = wc.team_by_driver(features)  # driver -> team, latest row wins
 headline = f"{used_year} {event_name} — round {target}"
 if mode in ("pre", "prequali"):
     st.subheader(f":material/rocket_launch: Prediction: {headline}")
-    if mode == "prequali":
+    if result.get("grid_note"):
+        st.caption(result["grid_note"])
+    elif mode == "prequali":
         st.caption("Pre-qualifying mode. Qualifying has not happened, so there is no grid "
                    "yet: the gain model has nothing to anchor to and is skipped — the "
                    "direct model predicts the finish order from practice, sprint and "
@@ -185,8 +187,10 @@ if mode == "post":
 if mode == "prequali":
     lanes = [("direct model", gain, "pred_pos")]
     lane_caption = ("Driver codes sit at the direct model's predicted finishing slot; "
-                    "dashed lines mark the podium and points cuts. There is no starting "
-                    "grid yet — qualifying has not happened.")
+                    "dashed lines mark the podium and points cuts. "
+                    + ("No starting grid is available — the qualifying results are "
+                       "still pending." if result.get("grid_note")
+                       else "There is no starting grid yet — qualifying has not happened."))
 else:
     lanes = [("gain model", gain, "pred_pos"), ("direct model", gain, "direct_pos")]
     lanes.append(("actual result" if mode == "post" else "starting grid",
