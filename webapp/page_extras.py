@@ -112,7 +112,7 @@ pred = result["pred"]
 imp = result["imp"]
 spec = predict_extras.TARGETS[result["milestone"]]
 colors = wc.team_colors(used_year)
-driver_team = features.groupby("driver")["team"].last().to_dict()
+driver_team = wc.team_by_driver(features)  # driver -> team, latest row wins
 
 # --- header ----------------------------------------------------------------
 headline = f"{used_year} {event_name} — round {target}"
@@ -171,25 +171,27 @@ else:
     styled = styled.map(proba_css, subset=["Probability"])
     if "Achieved" in disp.columns:
         styled = styled.map(lambda v: achieved_css if v == "yes" else "", subset=["Achieved"])
-    styled = styled.map(lambda t: wc.team_css(driver_team.get(t, ""), colors, bold=True), subset=["Driver"])
-    styled = styled.map(lambda t: wc.team_css(driver_team.get(t, ""), colors), subset=["Team"])
+    styled = wc.style_driver_team_columns(styled, table, colors)
     st.dataframe(styled, width="stretch", hide_index=True)
 
     p1, p2 = st.columns(2)
     proba = float(table.iloc[0]["probability"])
-    p1.success(f"**Predicted {spec['label'].lower()}: {pred['top1']}** ({proba:.0%})")
-    p2.info(f"**Baseline pick** ({spec['baseline_note']}): {pred['baseline']}")
+    p1.success(f"**Predicted {spec['label'].lower()}: "
+               f"{wc.driver_md(pred['top1'], driver_team, colors)}** ({proba:.0%})")
+    p2.info(f"**Baseline pick** ({spec['baseline_note']}): "
+            f"{wc.driver_md(pred['baseline'], driver_team, colors)}")
     if pred["actual"]:
         verdict = "hit" if pred["top1"] in pred["actual"] else "miss"
         icon = ":material/check_circle:" if verdict == "hit" else ":material/cancel:"
-        st.info(f"**Actual: {' / '.join(pred['actual'])}** — the model's call was a "
-                f"**{verdict}** {icon}")
+        st.info(f"**Actual: {wc.drivers_md(pred['actual'], driver_team, colors, sep=' / ')}** "
+                f"— the model's call was a **{verdict}** {icon}")
     elif mode == "post" or result["milestone"] == "pole":
         st.caption("Actual: not known yet.")
 
     st.markdown("**Top 10 driver probabilities**")
-    top10 = table.head(10).set_index("driver")["probability"]
-    st.bar_chart(top10, horizontal=True, x_label="model probability", y_label="")
+    st.altair_chart(wc.probability_chart(table, colors),
+                    theme="streamlit", width="stretch")
+    st.caption("One bar per driver, colored by their team.")
 
 # --- rolling backtest ------------------------------------------------------
 st.divider()

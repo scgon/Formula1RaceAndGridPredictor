@@ -96,6 +96,7 @@ anchor = result["main"]
 imp_anchor = result["imp_main"]
 imp_direct = result["imp_direct"]
 colors = wc.team_colors(used_year)
+driver_team = wc.team_by_driver(features)  # driver -> team, latest row wins
 
 # --- header ----------------------------------------------------------------
 headline = f"{used_year} {event_name} — round {target}"
@@ -148,17 +149,19 @@ for col in ("Anchor model", "Direct model", "Actual"):
         styled = styled.map(wc.position_css, subset=[col])
 if mode == "post":
     styled = styled.map(wc.zero_error_css, subset=["Error (anchor)", "Error (direct)"])
-styled = styled.map(lambda t: wc.team_css(t, colors, bold=True), subset=["Driver"])
-styled = styled.map(lambda t: wc.team_css(t, colors), subset=["Team"])
+styled = wc.style_driver_team_columns(styled, ordered, colors)
 st.dataframe(styled, width="stretch", hide_index=True)
 
 p1, p2 = st.columns(2)
-p1.success(f"**Predicted pole (anchor):** {anchor.iloc[0]['driver']}")
-p2.success(f"**Predicted pole (direct):** {anchor.sort_values('direct_pos').iloc[0]['driver']}")
+p1.success(f"**Predicted pole (anchor):** "
+           f"{wc.driver_md(anchor.iloc[0]['driver'], driver_team, colors)}")
+p2.success(f"**Predicted pole (direct):** "
+           f"{wc.driver_md(anchor.sort_values('direct_pos').iloc[0]['driver'], driver_team, colors)}")
 if mode == "post":
     pole_rows = features.loc[(features["round"] == target) & (features["quali_pos"] == 1), "driver"]
     if not pole_rows.empty:
-        st.info(f"**Actual pole:** {pole_rows.iloc[0]}", icon=":material/emoji_events:")
+        st.info(f"**Actual pole:** {wc.driver_md(pole_rows.iloc[0], driver_team, colors)}",
+                icon=":material/emoji_events:")
 
 # --- final predicted grids diagram -----------------------------------------
 lanes = [("anchor model", anchor, "pred_pos"), ("direct model", anchor, "direct_pos")]
@@ -256,7 +259,6 @@ else:
     poles = bt[["round", "event", "anchor_top1", "direct_top1", "actual_top1"]].copy()
     poles.columns = ["Round", "Event", "Predicted pole (anchor)",
                      "Predicted pole (direct)", "Actual pole"]
-    driver_team = features.groupby("driver")["team"].last().to_dict()
 
     css_frame = pd.DataFrame("", index=poles.index, columns=poles.columns)
     for i, row in poles.iterrows():
