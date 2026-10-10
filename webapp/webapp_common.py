@@ -750,26 +750,53 @@ def zero_error_css(value):
         return ""
 
 
+# The probability heat map's blue, per theme. Dark mode needs the lighter
+# tint AND a stronger, gamma-stretched opacity ramp: the light-mode blue,
+# kept translucent over the near-black theme background, stayed within
+# ~1.5:1 of it at the probabilities these models actually produce (top
+# picks are ~20-40%), so the heat map was effectively invisible in dark
+# mode. The brighter blue tops out at a clearly visible cell while light
+# text can still reach WCAG-AA contrast on it.
+PROBABILITY_FILL_LIGHT = (0, 98, 255)
+PROBABILITY_FILL_DARK = (96, 165, 250)
+
+
 def probability_css(value, dark=None):
     """Cell style for the extras page's probability column: a translucent
     blue fill whose opacity tracks the probability, with the text color
     fitted for WCAG-AA contrast against the fill *blended over the theme
-    background*. The blend stays dark in dark mode, so the light-mode navy
-    text would be invisible there — dark mode uses a light blue instead
-    (and light mode darkens the navy a touch where the fill is strongest).
+    background*. Light mode is the original pastel ramp with navy text.
+    Dark mode uses a lighter blue with a stronger, stretched ramp (a dark
+    translucent fill over the near-black background was invisible) and
+    flips the text to dark navy on the rare cell bright enough that no
+    light color can contrast with it.
     """
     if pd.isna(value):
         return ""
     if dark is None:
         dark = theme_is_dark()
-    fill_rgb = (0, 98, 255)
-    alpha = 0.12 + 0.6 * float(value)  # fill opacity tracks the probability
+    p = float(value)
+    if dark:
+        fill_rgb = PROBABILITY_FILL_DARK
+        alpha = 0.06 + 0.9 * p ** 0.75  # stretched: visible at realistic probabilities
+    else:
+        fill_rgb = PROBABILITY_FILL_LIGHT
+        alpha = 0.12 + 0.6 * p  # fill opacity tracks the probability
     base = DARK_BACKGROUND if dark else LIGHT_BACKGROUND
     blend = tuple(round(alpha * c + (1 - alpha) * b)
                   for c, b in zip(fill_rgb, base))
     text = (211, 232, 255) if dark else (11, 47, 107)  # light blue / navy
     if _contrast(text, blend) < CONTRAST_TARGET:
         text = _fit_lightness(text, blend, dark)
+        if _contrast(text, blend) < CONTRAST_TARGET:
+            # the fill is too bright for light text (only deep in dark
+            # mode's ramp) — flip polarity, keeping the flipped color when
+            # it already passes so the fit can't drift past a passing hue
+            flipped = (11, 47, 107) if dark else (211, 232, 255)
+            if _contrast(flipped, blend) >= CONTRAST_TARGET:
+                text = flipped
+            else:
+                text = _fit_lightness(flipped, blend, not dark)
     return (f"background-color: rgba({fill_rgb[0]}, {fill_rgb[1]}, {fill_rgb[2]}, {alpha}); "
             f"color: #{text[0]:02x}{text[1]:02x}{text[2]:02x}")
 
