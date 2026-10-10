@@ -125,28 +125,41 @@ def get_schedule(year):
     return fastf1.get_event_schedule(year, include_testing=False)
 
 
-@st.cache_resource(show_spinner=False)
+def _bundled_team_colors(year):
+    """{team -> hex color} for `year` from the bundled data/team_colors.csv
+    (the rows scripts/refresh_data.py writes via f1_common.season_team_colors).
+    Serves a fresh container — including Streamlit Community Cloud, whose
+    cold fastf1 cache plus the shared per-process API budget made the old
+    live lookup fail and pin a colorless (all-gray) app — without a single
+    API call. {} when the file or the year is not bundled."""
+    try:
+        frame = pd.read_csv(f1_common.TEAM_COLORS_CSV)
+    except (OSError, ValueError):
+        return {}
+    rows = frame[frame["year"] == year]
+    return {str(team): str(color) for team, color in zip(rows["team"], rows["color"])}
+
+
+@st.cache_resource(show_spinner=False, ttl=3600)
 def team_colors(year):
-    """Team name -> hex color, taken straight from fastf1 session results
-    (the same source the notebooks use). Most recent completed round wins.
-    The map is expanded with every historical name of each team, so frames
-    using either the CSV's or fastf1's naming find their color (see
-    TEAM_LINEAGES)."""
-    import fastf1
-    f1_common.setup()
-    rounds = f1_common.completed_rounds(get_schedule(year))
-    for rn, _name in reversed(rounds):
+    """Team name -> hex color for the season's teams, then expanded with
+    every historical name of each team (see TEAM_LINEAGES) so frames using
+    either the CSV's or fastf1's naming find their color.
+
+    The bundled data/team_colors.csv comes first: it renders without any
+    fastf1 session download, so cold containers (Community Cloud) show
+    colors even while the API rate limit is exhausted. Only years the
+    bundle does not cover fall back to f1_common.season_team_colors, i.e.
+    a live race-session download. The ttl keeps a failed fallback lookup
+    from being cached for the rest of the app process's lifetime (the
+    failure mode behind the cloud's gray tables/charts)."""
+    colors = _bundled_team_colors(year)
+    if not colors:
         try:
-            session = fastf1.get_session(year, rn, "R")
-            session.load(laps=False, telemetry=False, weather=False, messages=False)
-            colors = {t: "#" + c for t, c in
-                      zip(session.results["TeamName"], session.results["TeamColor"])
-                      if isinstance(c, str) and c}
-            if colors:
-                return expand_team_aliases(colors)
+            colors = f1_common.season_team_colors(year, get_schedule(year))
         except Exception:
-            continue
-    return {}
+            colors = {}  # colors degrade to gray; never crash the render
+    return expand_team_aliases(colors)
 
 
 # The season CSVs carry historical constructor names (Alpine F1 Team, RB F1
