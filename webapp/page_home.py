@@ -45,7 +45,7 @@ except Exception:
     st.caption("Race calendar unavailable (offline) — predictions still work from cached data.")
 
 # --- the pipelines ---------------------------------------------------------
-st.subheader("Three pipelines, six models plus six milestone classifiers")
+st.subheader("Three pipelines, six models plus seven milestone classifiers")
 
 race_col, grid_col, extras_col = st.columns(3)
 
@@ -94,10 +94,11 @@ with grid_col:
 with extras_col:
     st.markdown("##### :material/emoji_events: Milestones & extras")
     st.markdown(
-        "Six small classifiers, each predicting one weekend milestone — pick one and "
+        "Seven small classifiers, each predicting one weekend milestone — pick one and "
         "only it runs.\n\n"
         "- **Pole position** — day-before-quali information (FP1/FP2, sprint quali, quali form)\n"
         "- **Race winner** — from the grid, practice pace, sprint results and form\n"
+        "- **Race podium** — every driver's percent chance of a top-three finish\n"
         "- **First retirement** — adds driver/team reliability history\n"
         "- **Fastest lap** — one-lap pace, race pace and past fastest laps\n"
         "- **Sprint pole / Sprint winner** — Friday practice plus past sprint and quali form (sprint weekends only)\n"

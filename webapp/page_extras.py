@@ -1,5 +1,6 @@
 """Extras prediction page: one selected milestone model (pole, race winner,
-first retirement or fastest lap), presented like the race/quali pages."""
+race podium, first retirement, fastest lap, sprint pole or sprint winner),
+presented like the race/quali pages."""
 
 import sys
 from pathlib import Path
@@ -28,10 +29,11 @@ NOTICE_KEY = f"{KIND}_reload_notice"
 MILESTONE_OPTIONS = {spec["label"]: name for name, spec in predict_extras.TARGETS.items()}
 
 st.title("Milestones & Extras: one model, one pick")
-st.caption("Six small models, each predicting a single weekend milestone instead of a "
+st.caption("Seven small models, each predicting a single weekend milestone instead of a "
            "full order — pick one in the sidebar and only it runs. **Pole position** uses "
            "day-before-quali information only (FP1/FP2, sprint qualifying, past quali "
            "form), so it can predict before qualifying runs. **Race winner**, "
+           "**Race podium** (every driver's percent chance of a top-three finish), "
            "**First retirement** and **Fastest lap** use the pre-race information set "
            "(grid, FP1–FP3, sprint results, form and reliability history). "
            "**Sprint pole** and **Sprint winner** predict the sprint weekend's "
@@ -49,7 +51,7 @@ with st.sidebar:
     year, force_refresh, reload_pressed = wc.season_inputs(KIND)
     milestone_label = st.selectbox(
         "Milestone", list(MILESTONE_OPTIONS), key=f"{KIND}_milestone",
-        help="Which of the six milestone models to run — only this one is "
+        help="Which of the seven milestone models to run — only this one is "
              "trained and backtested.")
     milestone = MILESTONE_OPTIONS[milestone_label]
     spec = predict_extras.TARGETS[milestone]

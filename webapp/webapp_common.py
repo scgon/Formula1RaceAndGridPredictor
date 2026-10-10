@@ -403,7 +403,9 @@ def run_pipeline(kind, year, data_version, force_refresh, selection, min_train,
 def run_extras_pipeline(year, data_version, force_refresh, selection, min_train,
                         profile="fast", milestone="pole"):
     """Execute the extras pipeline for ONE selected milestone model
-    (pole / winner / first_dnf / fastest_lap) with the given settings.
+    (the `milestone` key of predict_extras.TARGETS: pole, winner, podium,
+    first_dnf, fastest_lap, sprint_pole or sprint_win) with the given
+    settings.
 
     Returns a render bundle for the extras page (stored in
     st.session_state by the caller), or {"error": message} when the run
