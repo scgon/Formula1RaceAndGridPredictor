@@ -231,10 +231,13 @@ def load_season(kind, year, force_refresh=False):
     return {"year": used_year, "data": data, "schedule": schedule, "log": log.getvalue()}
 
 
-def resolve_target(kind, selection, year, schedule, data):
+def resolve_target(kind, selection, year, schedule, data, milestone=None):
     """Map a UI selection onto the pipeline's resolve_target.
 
     selection: None (auto), "next", or an integer round number.
+    milestone: the selected extras milestone — the extras pipeline resolves
+    an upcoming round differently per milestone (the pole model can run
+    before qualifying, the race milestones cannot); race/grid ignore it.
     Returns (round, mode, event_name, log); raises TargetUnavailable with the
     CLI message when the round cannot be predicted.
     """
@@ -242,6 +245,7 @@ def resolve_target(kind, selection, year, schedule, data):
     args = SimpleNamespace(
         next=selection == "next",
         predict_round=selection if isinstance(selection, int) else None,
+        milestone=milestone,
     )
     with capture_stdout() as log:
         try:
@@ -258,6 +262,7 @@ def prepare_features(kind, season, target, mode, event_name):
     data = season["data"]
     with capture_stdout() as log:
         if mode == "prequali":
+            # race: no grid yet; extras: pole model before the round's quali
             completed = sorted(data["round"].unique())
             fallback = data[data["round"] == completed[-1]]
             upcoming = mod.load_upcoming_round_prequali(season["year"], target, event_name, fallback)
@@ -367,7 +372,8 @@ def run_extras_pipeline(year, data_version, force_refresh, selection, min_train,
                 return {"error": "No milestone data available for this or the previous season."}
             used_year = season["year"]
             target, mode, event_name, resolve_log = resolve_target(
-                "extras", selection, used_year, season["schedule"], season["data"])
+                "extras", selection, used_year, season["schedule"], season["data"],
+                milestone)
             prep = prepare_features("extras", season, target, mode, event_name)
             features = prep["features"]
             with st.spinner(f"Running rolling backtest (one {milestone.replace('_', ' ')} "
