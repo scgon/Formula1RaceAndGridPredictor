@@ -1,4 +1,5 @@
-"""Refresh the bundled season CSVs (data/*.csv).
+"""Refresh the bundled season CSVs (data/*.csv) and team colors
+(data/team_colors.csv).
 
 The web app and both CLI pipelines reuse these files, so a fresh container
 never re-downloads whole seasons (fastf1 hard-stops at 500 uncached API
@@ -75,6 +76,38 @@ def missing_rounds(kind, year, schedule):
     return sorted(completed - have)
 
 
+def refresh_team_colors(year, schedule):
+    """Rewrite `year`'s rows in data/team_colors.csv from the latest
+    completed round's team colors (f1_common.season_team_colors).
+
+    The web app renders from this bundle precisely so a fresh container
+    never needs a live fastf1 session for colors. Best effort: a failed
+    lookup (e.g. the API rate limit) only warns — the previously bundled
+    rows stay in place and the next run retries."""
+    try:
+        colors = f1_common.season_team_colors(year, schedule)
+    except Exception as exc:
+        print(f"Season {year} team colors: lookup failed ({exc}) — keeping the bundled rows")
+        return
+    if not colors:
+        print(f"Season {year} team colors: no completed rounds — nothing to bundle")
+        return
+    others = []
+    path = f1_common.TEAM_COLORS_CSV
+    if path.exists():
+        try:
+            existing = pd.read_csv(path)
+            others = [existing[existing["year"] != year][["year", "team", "color"]]]
+        except (OSError, ValueError):
+            others = []
+    rows = pd.DataFrame({"year": [year] * len(colors),
+                         "team": list(colors),
+                         "color": list(colors.values())})
+    pd.concat([*others, rows], ignore_index=True) \
+      .sort_values(["year", "team"], ignore_index=True).to_csv(path, index=False)
+    print(f"Season {year} team colors: bundled {len(colors)} teams")
+
+
 def collect_year(year, wait_on_limit, collect_extras):
     schedule = fastf1.get_event_schedule(year, include_testing=False)
     if not f1_common.completed_rounds(schedule):
@@ -102,6 +135,7 @@ def collect_year(year, wait_on_limit, collect_extras):
             ok = False
         else:
             print(f"Season {year} {kind}: complete")
+    refresh_team_colors(year, schedule)
     return ok
 
 

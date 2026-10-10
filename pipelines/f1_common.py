@@ -30,6 +30,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 CACHE_DIR = BASE_DIR / "cache"
 DATA_DIR = BASE_DIR / "data"
 
+# Bundled team colors (year, team, color) kept current by the refresh
+# workflow — what the web app renders from so a cold container never needs
+# a live fastf1 session for colors (see season_team_colors).
+TEAM_COLORS_CSV = DATA_DIR / "team_colors.csv"
+
 MIN_TRAIN_ROUNDS = 5
 STINT_WINDOW = 5
 STINT_MIN_LAPS = 3
@@ -152,6 +157,31 @@ def completed_rounds(schedule):
         if race_utc is not None and race_utc < now - COMPLETION_BUFFER:
             rounds.append((int(ev["RoundNumber"]), str(ev["EventName"])))
     return rounds
+
+
+def season_team_colors(year, schedule=None):
+    """{team name -> hex color} for one season, taken straight from the
+    latest completed round's race results (the same source the notebooks
+    use). Needs fastf1 session data: with a cold cache this downloads a
+    race session — which is exactly what a fresh app container cannot
+    afford once the API rate limit is exhausted — so the web app renders
+    from the bundled data/team_colors.csv (written from this function by
+    scripts/refresh_data.py) and calls this only for years the bundle does
+    not cover."""
+    if schedule is None:
+        schedule = fastf1.get_event_schedule(year, include_testing=False)
+    for rn, _name in reversed(completed_rounds(schedule)):
+        try:
+            session = fastf1.get_session(year, rn, "R")
+            session.load(laps=False, telemetry=False, weather=False, messages=False)
+            colors = {t: "#" + c for t, c in
+                      zip(session.results["TeamName"], session.results["TeamColor"])
+                      if isinstance(c, str) and c}
+            if colors:
+                return colors
+        except Exception:
+            continue
+    return {}
 
 
 def best_quali_seconds(qres, num):
