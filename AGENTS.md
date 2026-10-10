@@ -4,6 +4,7 @@
 
 - **Interpreter**: `/opt/homebrew/Caskroom/miniconda/base/bin/python` (Python 3.14, all deps installed). Do NOT rely on `python3` from PATH — on a fresh shell it can resolve to macOS system Python, which has none of the packages. PyCharm uses this same miniconda SDK.
 - **GitHub CLI**: `/opt/homebrew/bin/gh` (authenticated as `scgon`); often not on PATH.
+- **Feature worktrees**: new features are usually developed in sibling git worktrees (`git worktree add ../Formula1RaceAndGridPredictor-<name> -b <branch>`). A worktree checks out its own tracked `data/*.csv` (bundled seasons need no re-download) but starts with a **cold fastf1 cache** — `cache/` is gitignored. To share the main checkout's ~1 GB of downloaded sessions, symlink it: `ln -s <main-repo>/cache cache`. Gotcha: a `cache` *symlink* shows as untracked in `git status` (the `cache/` ignore pattern matches directories only) — never `git add -A` over it; drop the symlink when the worktree is retired.
 - No tests, lint, or typecheck exist. Verification = a full script run (pipelines), an AppTest run (web app), or a CLI-output parity diff (pipeline edits).
 
 ## File layout
@@ -28,6 +29,7 @@
 ├── .github/workflows/refresh-data.yml  # scheduled job keeping data/*.csv current
 ├── data/  cache/            # season CSVs (tracked; kept current by the workflow) + fastf1 cache (gitignored)
 ├── requirements.txt  README.md  LICENSE
+└── TODO.md                  # ideas backlog — checked items are already implemented
 ```
 
 Page scripts and `webapp_common` self-bootstrap `sys.path` (`webapp/` + `pipelines/`), so they run from the repo root without installation; `app.py` needs no bootstrap (imports only streamlit). `f1_common.BASE_DIR` points at the repo root, so `cache/` and `data/` are shared by pipelines, web app and notebooks no matter where each is executed from.
@@ -99,6 +101,7 @@ Shared CLI flags: `--season YEAR`, `--predict-round N`, `--next` (next race/qual
 
 - Models are `HistGradientBoostingRegressor(random_state=42)` (built via `f1_common.make_model`) with fixed data ordering — identical input yields identical backtest metrics, under both profiles (the tuner's candidate sampling is seeded too). If metrics shift after a code change, the change affected the model; it is not noise. Default (`--model fast`) metrics are byte-identical to the pre-profile behavior; the only fast-output change since then is the live training-progress lines (prints only, no metric impact). The defaults of the newer flags are also parity-verified: `--models both` and the default verbosity level reproduce the historical output exactly.
 - After touching pipeline code, verify parity by diffing CLI output before/after on a fixed round, e.g. `$PY -u pipelines/predict_race.py --season 2026 --predict-round 15`.
+- Prefer a **post-mode round of a bundled season** as the parity target: it resolves from the tracked CSV alone (downloads nothing, deterministic, ~1 min). Capture the before-output *before* editing (`... > /tmp/before.txt 2>&1`), then diff after. Strip fastf1 `WARNING` lines before diffing any run that touched live sessions — which warnings print depends on cache state, not on code.
 
 ## Web app verification
 
@@ -120,10 +123,13 @@ for page, run_key in (("webapp/page_home.py", None),
 EOF
 ```
 
+Run from the repo root (the snippet's relative `AppTest.from_file` paths resolve against the cwd of the stdin script); from any other cwd pass absolute paths — the gotcha below applies.
+
 - Prediction pages execute the full backtest + importance when **Run prediction** is pressed (~1-3 min with cached data under the fast profile; the optimized profile takes several times longer). A real browser check is `$PY -m streamlit run app.py --server.headless true` and `curl localhost:8501/healthz`.
 - AppTest gotchas (learned the hard way):
   - Press sidebar buttons via `at.sidebar.button(key="race_run").click()` then `at.run()` — elements render in the same run.
   - `selectbox.value` is the raw widget value and `set_value` must be given that same raw value: for label-based options (first-backtest, target, milestone selectboxes) that's the label string; anywhere a `format_func` was used, it's the underlying int. Passing the wrong one raises a confusing `ValueError: list.index(x)`. AppTest.from_file resolves relative paths against the *calling file's* directory — pass absolute paths.
+  - Rendered text splits across element lists: `st.markdown` → `at.markdown`, but text rendered with `st.subheader`/`st.success`/`st.info`/`st.caption` does NOT appear in `at.markdown` — assert against `at.subheader`/`at.success`/`at.info`/`at.caption` respectively (checking a section title in `at.markdown` fails even when the page rendered fine).
   - The auto target can **transiently fail right after a quali session whose results Ergast hasn't ingested yet** (the run then reports a clean "Pipeline failed: ... 0 sample(s)" error — no exception; this happens on unmodified HEAD too). When the AppTest run errors like that, select a completed round in the target selectbox instead (the label is `f"Round {rn} — {event} (completed)"`).
   - Chart elements (`st.bar_chart`/`st.altair_chart`) are not exposed on the AppTest element tree — verify charts via absence of exceptions plus the markdown titles around them, not by inspecting chart data.
   - AppTest has no theme attached, so `st.context.theme.type` is `None` there and `theme_is_dark` falls back to light mode. To exercise the dark-theme render path end-to-end, monkeypatch `webapp_common.theme_is_dark = lambda: True` before `AppTest.from_file(...)` (import webapp_common first so the pages resolve to the same module instance).
