@@ -9,6 +9,7 @@ the web app runs at the default level). The Streamlit app (app.py) builds on
 the same functions.
 """
 
+import re
 import warnings
 import time
 from datetime import datetime, timedelta, timezone
@@ -167,7 +168,12 @@ def season_team_colors(year, schedule=None):
     afford once the API rate limit is exhausted — so the web app renders
     from the bundled data/team_colors.csv (written from this function by
     scripts/refresh_data.py) and calls this only for years the bundle does
-    not cover."""
+    not cover.
+
+    Only well-formed hex values are accepted: fastf1 session results can
+    carry glitched TeamColor cells (e.g. the literal string 'nan' for Haas
+    in Abu Dhabi 2021), which once bundled as '#nan' and rendered that
+    team gray everywhere."""
     if schedule is None:
         schedule = fastf1.get_event_schedule(year, include_testing=False)
     for rn, _name in reversed(completed_rounds(schedule)):
@@ -176,7 +182,7 @@ def season_team_colors(year, schedule=None):
             session.load(laps=False, telemetry=False, weather=False, messages=False)
             colors = {t: "#" + c for t, c in
                       zip(session.results["TeamName"], session.results["TeamColor"])
-                      if isinstance(c, str) and c}
+                      if re.fullmatch(r"[0-9a-fA-F]{6}", str(c))}
             if colors:
                 return colors
         except Exception:
