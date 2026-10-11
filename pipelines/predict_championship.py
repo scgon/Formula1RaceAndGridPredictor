@@ -188,6 +188,27 @@ def load_training_seasons(schedule_loader=None):
     return seasons
 
 
+def complete_season_years(schedule_loader=None):
+    """Sorted years of every complete bundled season — the candidate seasons
+    of the leave-one-season-out backtest and its first-season setting. The
+    same completeness rule load_training_seasons applies, without keeping
+    the frames (cheap disk reads; the web app re-runs it per sidebar render).
+    `schedule_loader` lets the web app share its TTL-cached schedule lookup;
+    the CLI passes nothing and uses fastf1."""
+    if schedule_loader is None:
+        def schedule_loader(y):
+            return fastf1.get_event_schedule(y, include_testing=False)
+    years = []
+    for year in bundled_season_years():
+        try:
+            data = read_season_csv(year)
+        except (OSError, ValueError):
+            continue
+        if season_is_complete(year, schedule_loader(year), data):
+            years.append(year)
+    return sorted(years)
+
+
 # --- snapshots ----------------------------------------------------------------
 
 def _season_points(data, year):
@@ -491,13 +512,19 @@ def baseline_projection(features, target_year, snapshot_round, championship="dri
 # --- backtest -------------------------------------------------------------------
 
 def backtest_records(features, min_train_rounds, profile="fast", models="both",
-                     championship="drivers"):
+                     championship="drivers", first_season=None):
     """Leave-one-season-out backtest: every complete bundled season forecast
     after each of its rounds (from the first round with `min_train_rounds`
     completed rounds before it, up to but excluding the season's final
     round — as of the final round there is nothing left to forecast), each
     forecast trained only on complete seasons before it, at snapshot rounds
     up to the forecast round.
+
+    first_season scopes the EVALUATION to that season and later (None — the
+    default, auto — forecasts every complete bundled season that has at
+    least one earlier complete season to train on; the earliest bundled
+    season is never forecast, whatever this is set to). The final forecast
+    is unaffected: it always trains on every complete earlier season.
 
     One record per (season, round): the final-points MAE, champion hit,
     top-3 overlap and rank correlation of the selected models and of the
@@ -510,7 +537,12 @@ def backtest_records(features, min_train_rounds, profile="fast", models="both",
     records = []
     tune_note = " (tuning hyperparameters)" if profile == "optimized" else ""
     model_names = [m for m in ("remaining", "direct") if models in ("both", m)]
+    if first_season is not None:
+        common.vprint(1, f"backtest scope: seasons from {first_season} onwards "
+                         "(first backtest season setting)")
     for year in sorted(int(y) for y in features["year"].unique()):
+        if first_season is not None and year < first_season:
+            continue
         rows_season = features[features["year"] == year]
         if rows_season["final"].isna().all():
             continue  # a season in progress has no final standings to score
@@ -884,6 +916,10 @@ def main():
     parser.add_argument("--min-train-rounds", type=int, default=MIN_TRAIN_ROUNDS,
                         help="minimum completed rounds before the first forecast "
                              "round (default: 5)")
+    parser.add_argument("--first-backtest-season", type=int, default=None,
+                        help="first season the leave-one-season-out backtest "
+                             "forecasts (default: every complete bundled season "
+                             "that has an earlier complete season to train on)")
     parser.add_argument("--model", choices=common.MODEL_PROFILES, default="fast",
                         help="model profile: 'fast' uses fixed hyperparameters, "
                              "'optimized' tunes them per model by minimizing "
@@ -926,7 +962,8 @@ def main():
     print(f"Features: {', '.join(spec['features'])}")
 
     backtest_report(backtest_records(features, args.min_train_rounds, args.model,
-                                     args.models, args.championship),
+                                     args.models, args.championship,
+                                     first_season=args.first_backtest_season),
                     args.models, args.championship)
     final_report(features, year, target, event_name, mode, args.model, args.models,
                  args.championship, rounds_total=int(schedule["RoundNumber"].max()))

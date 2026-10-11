@@ -35,8 +35,9 @@ st.caption("Projects the **final championship points table** at the end of the s
            "extrapolation (current points + season-average per round × remaining rounds). "
            "A mid-season snapshot cannot know its own season's final points, so models "
            "train across past completed seasons and are backtested leave-one-season-out "
-           "over every complete bundled season — the same data files the race pipeline "
-           "collects, no new downloads.")
+           "over the bundled past seasons (the *First backtest season* setting scopes "
+           "how far back) — the same data files the race pipeline collects, no new "
+           "downloads.")
 
 if VERSION_KEY not in st.session_state:
     st.session_state[VERSION_KEY] = 0
@@ -54,6 +55,8 @@ with st.sidebar:
     completed = wc.completed_round_numbers(schedule)
     selection = wc.snapshot_round_selectbox(KIND, schedule, set(completed))
     min_train = wc.first_backtest_control(KIND, completed)
+    first_season = wc.first_backtest_season_control(
+        KIND, predict_championship.complete_season_years(wc.get_schedule))
     profile = wc.model_profile_input(KIND)
     run_pressed = st.button("Run prediction", type="primary", key=f"{KIND}_run",
                             help="Execute the pipeline with the current settings — "
@@ -71,7 +74,7 @@ if reload_pressed:
 if run_pressed:
     result = wc.run_championship_pipeline(year, st.session_state[VERSION_KEY],
                                            force_refresh, selection, min_train,
-                                           profile, championship)
+                                           profile, championship, first_season)
     if "error" in result:
         st.session_state[ERROR_KEY] = result["error"]
     else:
@@ -92,7 +95,7 @@ if result is None:
     st.stop()
 
 if result["settings"] != (year, st.session_state[VERSION_KEY], force_refresh,
-                          selection, min_train, profile, championship):
+                          selection, min_train, profile, championship, first_season):
     st.warning("Settings changed since the last run — press **Run prediction** to update the results.")
 
 # --- unpack the run --------------------------------------------------------
@@ -258,16 +261,27 @@ else:
 # --- rolling backtest --------------------------------------------------------
 st.divider()
 st.subheader("Rolling backtest")
-st.caption("Every complete bundled season forecast after each of its rounds from the "
-           "first forecast round onwards, each forecast trained only on earlier "
-           "complete seasons (leave-one-season-out). A season's final round has "
-           "nothing left to forecast and is skipped.")
+st.caption("Leave-one-season-out: each included season is forecast after each of its "
+           "rounds from the first forecast round onwards, every forecast trained only "
+           "on earlier complete seasons (a season's final round has nothing left to "
+           "forecast and is skipped). The *First backtest season* setting scopes "
+           "which seasons are included.")
 
 if not records:
     st.info("Not enough completed seasons for a backtest yet.")
 else:
     bt = pd.DataFrame(records)
     n = len(bt)
+
+    if result["first_season"] is not None:
+        st.caption(f":material/filter_alt: *First backtest season* setting: the metrics "
+                   f"below cover seasons **{result['first_season']}** and later — earlier "
+                   f"seasons are excluded from the evaluation.")
+    else:
+        st.caption(f":material/filter_alt: *First backtest season*: Auto — every complete "
+                   f"bundled season with training data, from **{int(bt['season'].min())}** "
+                   f"onwards. The earliest bundled season is never forecast: nothing "
+                   f"earlier exists to train its forecasts on.")
 
     r1c1, r1c2, r1c3 = st.columns(3)
     r1c1.metric("Final-points MAE — remaining", f"{bt['remaining_mae'].mean():.1f}",

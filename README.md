@@ -136,6 +136,9 @@ python -u pipelines/predict_championship.py --championship constructors
 # Retro-forecast: project a completed season's standings as of an earlier round
 python -u pipelines/predict_championship.py --season 2025 --predict-round 10
 
+# Backtest the most recent seasons only (the backtest is the slow part)
+python -u pipelines/predict_championship.py --first-backtest-season 2023
+
 # Specific season and round
 python -u pipelines/predict_race.py --season 2025 --predict-round 12
 python -u pipelines/predict_grid.py --season 2025 --predict-round 12
@@ -156,6 +159,7 @@ Common flags:
 --next
 --milestone {pole,winner,podium,first_dnf,fastest_lap,sprint_pole,sprint_win,champion}
 --championship {drivers,constructors}   # championship pipeline
+--first-backtest-season YEAR            # championship backtest scope (default: auto)
 --model {fast,optimized}
 --models {both,gain,direct}      # race pipeline
 --models {both,anchor,direct}    # grid pipeline
@@ -226,6 +230,7 @@ Key behavior:
 - A snapshot at round N includes round N itself — it is the championship state as of the end of that round, exactly what a live forecast sees
 - A mid-season snapshot cannot know its own season's final points, so the models train across seasons: every training row's target is an entrant's final points of a complete earlier season (`data/season_*.csv`; the target season never trains its own forecast)
 - The backtest is leave-one-season-out: every complete bundled season is forecast after each of its rounds, each forecast trained only on earlier complete seasons; a season's final round is skipped because there is nothing left to forecast
+- `--first-backtest-season YEAR` scopes the backtest to that season and later; the default (auto) forecasts every complete bundled season that has an earlier complete season to train on — the earliest bundled season is never forecast because its forecasts would have no training pool. The setting scopes the evaluation only: the final forecast always trains on every complete earlier season
 - Sprint points are derived from the stored sprint finishing positions using the era's scheme (none before 2021, 3-2-1 in 2021, 8-…-1 from 2022), reproducing the official standings of every bundled season
 - `--predict-round` retro-forecasts: project a completed season's standings as of an earlier round and compare against the actual final table; for a season in progress the projection is live, anchored at the last completed round
 

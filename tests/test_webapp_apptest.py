@@ -125,3 +125,31 @@ def test_championship_page_full_run_on_a_completed_season():
     assert not at.exception and not at.error
     assert any("Review" in s.value for s in at.subheader)
     assert at.dataframe  # the projected standings table rendered
+
+
+@pytest.mark.slow
+def test_championship_page_first_backtest_season_setting():
+    # the *First backtest season* selectbox wired end-to-end: an explicit
+    # season scopes the backtest to that season and later, and the scope
+    # caption renders. A late *First backtest round* keeps only a couple of
+    # forecasts, so this full Run stays fast.
+    complete = [y for y in wc.bundled_years("championship") if y < datetime.now().year]
+    if not complete:
+        pytest.skip("no completed championship season is bundled")
+    season = max(complete)
+    at = AppTest.from_file(str(PAGES / "page_championship.py"), default_timeout=900)
+    at.run()
+    assert not at.exception
+    at.sidebar.selectbox(key="championship_season").set_value(season)
+    at.sidebar.selectbox(key="championship_championship").set_value(
+        "Drivers' championship")
+    at.run()  # re-render the round/season selectboxes with the chosen season
+    round_labels = [o for o in at.sidebar.selectbox(key="championship_first_backtest").options
+                    if o.startswith("Round ")]
+    at.sidebar.selectbox(key="championship_first_backtest").set_value(round_labels[-2])
+    at.sidebar.selectbox(key="championship_first_season").set_value(str(season))
+    at.sidebar.button(key="championship_run").click()
+    at.run()
+    assert not at.exception and not at.error
+    assert any("First backtest season" in c.value for c in at.caption)
+    assert any("excluded from the evaluation" in c.value for c in at.caption)

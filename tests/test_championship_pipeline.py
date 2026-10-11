@@ -174,6 +174,36 @@ def test_backtest_records_score_against_final_standings():
     assert all(rec["season"] != 2022 for rec in records)
 
 
+def test_backtest_first_season_scopes_the_evaluated_seasons():
+    features = pc.build_features(
+        _seasons((2022, 3, (), True), (2023, 3, (), True), (2024, 3, (), True)),
+        "drivers")
+    auto = pc.backtest_records(features, min_train_rounds=1, models="both")
+    # auto forecasts every complete season with an earlier one to train on
+    assert {rec["season"] for rec in auto} == {2023, 2024}
+    # an explicit first season scopes the evaluation to that season onwards,
+    # keeping the auto records of the kept seasons identical
+    scoped = pc.backtest_records(features, min_train_rounds=1, models="both",
+                                 first_season=2024)
+    assert scoped == [rec for rec in auto if rec["season"] >= 2024]
+    # a first season at/below the earliest complete season behaves like auto:
+    # the earliest bundled season is never forecast (nothing to train on)
+    assert pc.backtest_records(features, min_train_rounds=1, models="both",
+                               first_season=2022) == auto
+
+
+def test_complete_season_years_applies_the_completeness_rule(monkeypatch, tmp_path):
+    monkeypatch.setattr(pc.common, "DATA_DIR", tmp_path)
+    for year, rounds in ((2023, 3), (2024, 2)):
+        _raw_season(rounds=rounds).to_csv(tmp_path / f"season_{year}.csv", index=False)
+    schedules = {2023: pd.DataFrame({"RoundNumber": [1, 2, 3]}),
+                 2024: pd.DataFrame({"RoundNumber": [1, 2, 3]})}
+    monkeypatch.setattr(pc.common, "completed_rounds",
+                        lambda sched: [(rn, "r") for rn in sched["RoundNumber"]])
+    # 2023's CSV covers its whole (completed) calendar; 2024's does not
+    assert pc.complete_season_years(lambda y: schedules[y]) == [2023]
+
+
 def test_final_predictions_bundle_and_error():
     features = pc.build_features(
         _seasons((2022, 3, (), True), (2023, 3, (), True), (2024, 3, (), True)),

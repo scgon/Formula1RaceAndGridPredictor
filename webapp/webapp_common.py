@@ -518,12 +518,15 @@ def run_extras_pipeline(year, data_version, force_refresh, selection, min_train,
 
 
 def run_championship_pipeline(year, data_version, force_refresh, selection, min_train,
-                              profile="fast", championship="drivers"):
+                              profile="fast", championship="drivers",
+                              first_season=None):
     """Execute the championship pipeline once with the given settings: load
     the target season's data, build cross-season snapshots, run the
     leave-one-season-out backtest and project the final standings as of the
     selected snapshot round for the selected championship (drivers /
-    constructors — only that one trains and forecasts).
+    constructors — only that one trains and forecasts). first_season scopes
+    the backtest to that season and later (None = auto: every complete
+    bundled season with training data — see first_backtest_season_control).
 
     Returns a render bundle for the championship page (stored in
     st.session_state by the caller), or {"error": message} when the run
@@ -551,7 +554,8 @@ def run_championship_pipeline(year, data_version, force_refresh, selection, min_
                         championship)
             with st.spinner(f"Running rolling backtest (one forecast per season round){tune_note}..."):
                 records = predict_championship.backtest_records(
-                    features, min_train, profile, "both", championship)
+                    features, min_train, profile, "both", championship,
+                    first_season)
             with st.spinner("Training final models and computing permutation importance..."):
                 pred = predict_championship.final_predictions(
                     features, used_year, target, profile, "both", championship)
@@ -559,7 +563,7 @@ def run_championship_pipeline(year, data_version, force_refresh, selection, min_
                 imp_direct = predict_championship.importance_frame(pred, "direct")
         return {
             "settings": (year, data_version, force_refresh, selection, min_train, profile,
-                        championship),
+                        championship, first_season),
             "requested_year": year,
             "year": used_year,
             "target": target,
@@ -572,6 +576,7 @@ def run_championship_pipeline(year, data_version, force_refresh, selection, min_
             "features": features,
             "records": records,
             "championship": championship,
+            "first_season": first_season,
             "pred": pred,
             "train_seasons": pred.get("train_seasons", 0),
             "imp_main": imp_main,
@@ -728,6 +733,29 @@ def first_backtest_control(kind, completed):
     if selected is None:
         return f1_common.MIN_TRAIN_ROUNDS
     return sum(1 for r in completed if r < selected)
+
+
+def first_backtest_season_control(kind, complete_seasons):
+    """Sidebar selectbox picking the earliest season the championship backtest
+    forecasts. "Auto (recommended)" — the default — forecasts every complete
+    bundled season that has at least one earlier complete season to train on
+    (the earliest bundled season is never forecast: nothing exists to train
+    its forecasts on, whatever this picks). An explicit season scopes the
+    leave-one-season-out backtest to that season and later — fewer seasons
+    means a faster backtest weighted towards the recent eras. The final
+    forecast is unaffected: it always trains on every complete earlier
+    season. Returns None (auto) or the year."""
+    options = {"Auto (recommended)": None}
+    for year in complete_seasons:
+        options[str(year)] = year
+    choice = st.selectbox(
+        "First backtest season", list(options), key=f"{kind}_first_season",
+        help="Auto backtests every complete bundled season that has at least one "
+             "earlier complete season to train on. An explicit season backtests that "
+             "season and later only — a smaller backtest runs faster and weights the "
+             "metrics towards recent eras. This scopes the evaluation only: the final "
+             "forecast always trains on every complete earlier season.")
+    return options[choice]
 
 
 def on_community_cloud():
