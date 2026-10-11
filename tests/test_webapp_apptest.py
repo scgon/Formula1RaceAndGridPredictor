@@ -2,16 +2,18 @@
 prediction page must complete a full Run (data -> resolve -> features ->
 backtest -> final models -> importance -> render) off the bundled CSVs.
 
-The Run tests pin a completed round so they are deterministic: a post-mode
-round resolves from the tracked CSVs alone and downloads nothing beyond
-the season schedule (one tiny call — these tests need network access,
-which is why they carry the "slow" marker; run `-m "not slow"` for the
-offline-only fast subset).
+The Run tests pin a completed round — the newest one present in the
+bundled season CSV — so they are deterministic: a post-mode round resolves
+from the tracked CSVs alone and downloads nothing beyond the season
+schedule (one tiny call — these tests need network access, which is why
+they carry the "slow" marker; run `-m "not slow"` for the offline-only
+fast subset).
 """
 
 from pathlib import Path
 from datetime import datetime
 
+import pandas as pd
 import pytest
 from streamlit.testing.v1 import AppTest
 
@@ -20,13 +22,38 @@ import webapp_common as wc
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PAGES = REPO_ROOT / "webapp"
 
+# target-selectbox key -> the season CSV the page's Run resolves from
+SEASON_CSV = {"race_target": "season_{year}.csv",
+              "grid_target": "quali_season_{year}.csv",
+              "extras_target": "extras_season_{year}.csv"}
+
 
 def _completed_target_label(at, key):
-    selectbox = at.sidebar.selectbox(key=key)
-    labels = [o for o in selectbox.options if "(completed)" in o]
-    # the LAST completed round: round 1 can never be predicted (no training
-    # data before it), and later rounds exercise a fully-trained backtest
-    return labels[-1]
+    """Label of the newest round a Run can actually resolve: completed on
+    the calendar AND present in the bundled season CSV.
+
+    A round counts as completed 3 hours after its race start, but the data
+    providers lag behind the session — race results reach the results API
+    quickly, the lap data the extras pipeline needs much later — so for
+    hours after every race the newest completed round is missing from its
+    CSV and cannot be fetched either. A Run pinned to such a round renders
+    the designed "retry in a few hours" error instead of a prediction,
+    which would fail the suite for no code reason; pinning to the CSV
+    keeps the Run resolving from the tracked data alone. Round 1 can never
+    be predicted (no training data before it) — the later the round, the
+    more fully-trained the backtest it exercises."""
+    kind = key.removesuffix("_target")
+    year = int(at.sidebar.selectbox(key=f"{kind}_season").value)
+    path = REPO_ROOT / "data" / SEASON_CSV[key].format(year=year)
+    if not path.exists():
+        pytest.skip(f"no bundled {kind} season CSV for {year} yet")
+    have = set(pd.read_csv(path, usecols=["round"])["round"])
+    labels = [o for o in at.sidebar.selectbox(key=key).options
+              if "(completed)" in o]
+    runnable = [o for o in labels if int(o.split()[1]) in have]
+    if not runnable:
+        pytest.skip(f"no completed round of the {year} {kind} season is bundled yet")
+    return runnable[-1]
 
 
 def test_home_page_renders():
