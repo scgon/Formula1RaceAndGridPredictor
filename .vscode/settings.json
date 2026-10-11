@@ -1,0 +1,16 @@
+{
+    "python.defaultInterpreterPath": "/opt/homebrew/Caskroom/miniconda/base/bin/python",
+    "python.testing.cwd": "${workspaceFolder}",
+    "python.testing.pytestEnabled": true,
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestArgs": [
+        "tests"
+    ],
+    "python.testing.autoTestDiscoverOnSaveEnabled": true,
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}",
+        "${workspaceFolder}/pipelines",
+        "${workspaceFolder}/webapp",
+        "${workspaceFolder}/scripts"
+    ]
+}
