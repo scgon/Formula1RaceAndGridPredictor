@@ -14,6 +14,7 @@ PIPELINES = [
     "pipelines/predict_race.py",
     "pipelines/predict_grid.py",
     "pipelines/predict_extras.py",
+    "pipelines/predict_championship.py",
 ]
 
 

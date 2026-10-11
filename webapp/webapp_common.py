@@ -1,8 +1,9 @@
 """Streamlit glue for the F1 prediction web app.
 
-No pipeline logic lives here — this module only wires the three pipelines
-(predict_race / predict_grid / predict_extras, all built on f1_common) into
-Streamlit via run_pipeline / run_extras_pipeline.
+No pipeline logic lives here — this module only wires the four pipelines
+(predict_race / predict_grid / predict_extras / predict_championship, all
+built on f1_common) into Streamlit via run_pipeline / run_extras_pipeline /
+run_championship_pipeline.
 
 Execution is button-gated: changing a widget never starts the pipeline.
 Pressing **Run prediction** executes the whole pipeline once and stores a
@@ -37,13 +38,15 @@ for _p in (_HERE, _HERE.parent / "pipelines"):
         sys.path.insert(0, str(_p))
 
 import f1_common
+import predict_championship
 import predict_extras
-import predict_race
 import predict_grid
+import predict_race
 
 f1_common.setup()
 
-MODULES = {"race": predict_race, "grid": predict_grid, "extras": predict_extras}
+MODULES = {"race": predict_race, "grid": predict_grid, "extras": predict_extras,
+           "championship": predict_championship}
 
 CURRENT_YEAR = datetime.now().year
 
@@ -233,7 +236,9 @@ def bundled_years(kind=None):
     """Years whose season CSVs are bundled in the repo (race + grid CSVs
     present; for kind="extras" an extras CSV too — the extras data only
     covers seasons it was generated for, and its first collection also
-    downloads race lap data).
+    downloads race lap data). kind="championship" needs the race CSVs only
+    (the championship pipeline reads those, deriving sprint points from
+    them — no data format of its own).
 
     Selecting a bundled year never triggers a bulk season download — only
     rounds completed since the CSV snapshot (plus the upcoming round's
@@ -246,7 +251,8 @@ def bundled_years(kind=None):
             year = int(path.stem.split("_")[1])
         except (IndexError, ValueError):
             continue
-        if (f1_common.DATA_DIR / f"quali_season_{year}.csv").exists():
+        if (kind == "championship"
+                or (f1_common.DATA_DIR / f"quali_season_{year}.csv").exists()):
             years.add(year)
     if kind == "extras":
         years = {y for y in years
@@ -259,9 +265,10 @@ def bundled_years(kind=None):
 # ---------------------------------------------------------------------------
 
 def load_season(kind, year, force_refresh=False):
-    """Collect season data for one pipeline ("race" / "grid"), reusing the
-    local CSV cache; falls back to the previous year if the requested season
-    has no completed rounds yet, mirroring the CLI. Returns
+    """Collect season data for one pipeline ("race" / "grid" / "extras" /
+    "championship" — the championship kind shares the race pipeline's CSV),
+    reusing the local CSV cache; falls back to the previous year if the
+    requested season has no completed rounds yet, mirroring the CLI. Returns
     {year, data, schedule, log}; data is None when nothing is available."""
     mod = MODULES[kind]
     with capture_stdout() as log:
@@ -278,13 +285,16 @@ def load_season(kind, year, force_refresh=False):
     return {"year": used_year, "data": data, "schedule": schedule, "log": log.getvalue()}
 
 
-def resolve_target(kind, selection, year, schedule, data, milestone=None):
+def resolve_target(kind, selection, year, schedule, data, milestone=None, min_train=None):
     """Map a UI selection onto the pipeline's resolve_target.
 
     selection: None (auto), "next", or an integer round number.
     milestone: the selected extras milestone — the extras pipeline resolves
     an upcoming round differently per milestone (the pole model can run
     before qualifying, the race milestones cannot); race/grid ignore it.
+    min_train: the selected first-backtest-round minimum — the championship
+    pipeline gates a forecast round on completed rounds before it;
+    race/grid/extras ignore it.
     Returns (round, mode, event_name, log); raises TargetUnavailable with the
     CLI message when the round cannot be predicted.
     """
@@ -293,6 +303,7 @@ def resolve_target(kind, selection, year, schedule, data, milestone=None):
         next=selection == "next",
         predict_round=selection if isinstance(selection, int) else None,
         milestone=milestone,
+        min_train_rounds=min_train,
     )
     with capture_stdout() as log:
         try:
@@ -302,12 +313,13 @@ def resolve_target(kind, selection, year, schedule, data, milestone=None):
     return target, mode, event_name, log.getvalue()
 
 
-def prepare_features(kind, season, target, mode, event_name):
+def prepare_features(kind, season, target, mode, event_name, milestone=None):
     """Season data + (in pre/prequali mode) the upcoming round, turned into
     features. Returns {"features", "mode", "log"} — mode is the possibly
     downgraded target mode: a race pre target whose qualifying results the
     provider has not ingested yet has no grid, so it downgrades to prequali
-    and the direct model predicts alone."""
+    and the direct model predicts alone. For the champion milestone (extras
+    only) the championship standings columns are added on top."""
     mod = MODULES[kind]
     data = season["data"]
     with capture_stdout() as log:
@@ -333,6 +345,12 @@ def prepare_features(kind, season, target, mode, event_name):
                 upcoming = mod.load_upcoming_round(season["year"], target, event_name)
             data = pd.concat([data[data["round"] != target], upcoming], ignore_index=True)
         features = mod.build_features(data)
+        if kind == "extras" and milestone == "champion":
+            year = season["year"]
+            schedule = season["schedule"]
+            features = mod.add_championship_columns(
+                features, year, int(schedule["RoundNumber"].max()),
+                mod.season_complete(year, schedule))
     return {"features": features, "mode": mode, "log": log.getvalue()}
 
 
@@ -359,7 +377,8 @@ def run_pipeline(kind, year, data_version, force_refresh, selection, min_train,
                 return {"error": f"No {label} data available for this or the previous season."}
             used_year = season["year"]
             target, mode, event_name, resolve_log = resolve_target(
-                kind, selection, used_year, season["schedule"], season["data"])
+                kind, selection, used_year, season["schedule"], season["data"],
+                min_train=min_train)
             prep = prepare_features(kind, season, target, mode, event_name)
             features = prep["features"]
             # a race pre target whose qualifying results the provider has
@@ -429,8 +448,8 @@ def run_extras_pipeline(year, data_version, force_refresh, selection, min_train,
                         profile="fast", milestone="pole"):
     """Execute the extras pipeline for ONE selected milestone model
     (the `milestone` key of predict_extras.TARGETS: pole, winner, podium,
-    first_dnf, fastest_lap, sprint_pole or sprint_win) with the given
-    settings.
+    first_dnf, fastest_lap, sprint_pole, sprint_win or champion) with the
+    given settings.
 
     Returns a render bundle for the extras page (stored in
     st.session_state by the caller), or {"error": message} when the run
@@ -448,14 +467,21 @@ def run_extras_pipeline(year, data_version, force_refresh, selection, min_train,
             target, mode, event_name, resolve_log = resolve_target(
                 "extras", selection, used_year, season["schedule"], season["data"],
                 milestone)
-            prep = prepare_features("extras", season, target, mode, event_name)
+            prep = prepare_features("extras", season, target, mode, event_name,
+                                    milestone)
             features = prep["features"]
+            # the champion model trains cross-season: its pool is every
+            # bundled race season before this one (read from disk, no
+            # downloads) — the extras CSVs alone only cover recent seasons
+            history = (predict_extras.champion_history(used_year)
+                       if milestone == "champion" else None)
             with st.spinner(f"Running rolling backtest (one {milestone.replace('_', ' ')} "
                             f"model per round){tune_note}..."):
                 records = predict_extras.backtest_records(features, min_train, profile,
-                                                          milestone)
+                                                          milestone, history)
             with st.spinner("Training final model and computing permutation importance..."):
-                pred = predict_extras.final_predictions(features, target, profile, milestone)
+                pred = predict_extras.final_predictions(features, target, profile, milestone,
+                                                       history)
                 imp = predict_extras.importance_frame(pred)
         return {
             "settings": (year, data_version, force_refresh, selection, min_train, profile,
@@ -491,9 +517,87 @@ def run_extras_pipeline(year, data_version, force_refresh, selection, min_train,
         log_box.empty()
 
 
+def run_championship_pipeline(year, data_version, force_refresh, selection, min_train,
+                              profile="fast", championship="drivers"):
+    """Execute the championship pipeline once with the given settings: load
+    the target season's data, build cross-season snapshots, run the
+    leave-one-season-out backtest and project the final standings as of the
+    selected snapshot round for the selected championship (drivers /
+    constructors — only that one trains and forecasts).
+
+    Returns a render bundle for the championship page (stored in
+    st.session_state by the caller), or {"error": message} when the run
+    failed. Download progress and the per-model training lines stream live
+    into a log element, like run_pipeline. The pred entry mirrors the
+    extras pipeline's: it carries an "error" message instead of the models
+    when they cannot train (e.g. the earliest bundled season selected as
+    target — nothing before it to train on).
+    """
+    log_box = st.empty()
+    tune_note = " (tuning hyperparameters per model)" if profile == "optimized" else ""
+    try:
+        with capture_stdout(log_box, refresh_secs=0.3):
+            season = load_season("championship", year, force_refresh)
+            if season["data"] is None:
+                return {"error": "No championship data available for this or the previous season."}
+            used_year = season["year"]
+            target, mode, event_name, resolve_log = resolve_target(
+                "championship", selection, used_year, season["schedule"],
+                season["data"], min_train=min_train)
+            with st.spinner("Building championship snapshots (all bundled seasons)..."):
+                with capture_stdout() as train_log:
+                    features = predict_championship.load_feature_seasons(
+                        used_year, season["data"], season["schedule"], get_schedule,
+                        championship)
+            with st.spinner(f"Running rolling backtest (one forecast per season round){tune_note}..."):
+                records = predict_championship.backtest_records(
+                    features, min_train, profile, "both", championship)
+            with st.spinner("Training final models and computing permutation importance..."):
+                pred = predict_championship.final_predictions(
+                    features, used_year, target, profile, "both", championship)
+                imp_main = predict_championship.importance_frame(pred, "remaining")
+                imp_direct = predict_championship.importance_frame(pred, "direct")
+        return {
+            "settings": (year, data_version, force_refresh, selection, min_train, profile,
+                        championship),
+            "requested_year": year,
+            "year": used_year,
+            "target": target,
+            "mode": mode,
+            "event": event_name,
+            "rounds_total": int(season["schedule"]["RoundNumber"].max()),
+            "resolve_log": resolve_log,
+            "season_log": season["log"],
+            "train_log": train_log.getvalue(),
+            "features": features,
+            "records": records,
+            "championship": championship,
+            "pred": pred,
+            "train_seasons": pred.get("train_seasons", 0),
+            "imp_main": imp_main,
+            "imp_direct": imp_direct,
+            "tuned_params": ({"remaining": pred["remaining_params"],
+                              "direct": pred["direct_params"]}
+                             if profile == "optimized" and "error" not in pred else None),
+        }
+    except TargetUnavailable as exc:
+        return {"error": str(exc)}
+    except RateLimitExceededError:
+        return {"error": "The F1 data API rate limit was hit (500 calls per hour) — "
+                         "this clears within the hour. Rounds fetched so far are saved; "
+                         "press Run prediction again later. On the hosted app the limit is "
+                         "shared with other visitors — running the project locally "
+                         "(`python -m streamlit run app.py`) avoids it."}
+    except Exception as exc:  # download failures etc.
+        return {"error": f"Pipeline failed: {type(exc).__name__}: {exc}"}
+    finally:
+        log_box.empty()
+
+
 # ---------------------------------------------------------------------------
 # UI helpers
 # ---------------------------------------------------------------------------
+
 
 def season_inputs(kind):
     """Sidebar season + data controls. Returns (year, force_refresh, reload_pressed).
@@ -570,6 +674,26 @@ def target_selectbox(kind, schedule, completed_rounds, milestone=None):
     return options[choice]
 
 
+def snapshot_round_selectbox(kind, schedule, completed_rounds):
+    """Round selector for the championship page: the round the standings are
+    projected AS OF. Unlike the round pipelines there are no pre/post modes —
+    an un-run round carries no information, so only completed rounds are
+    offered. Returns None (auto = the season's last completed round) or a
+    round number."""
+    options = {"Auto (latest completed round)": None}
+    for _, row in schedule.iterrows():
+        rn = int(row["RoundNumber"])
+        if rn in completed_rounds:
+            options[f"As of round {rn} — {row['EventName']}"] = rn
+    choice = st.selectbox(
+        "Forecast as of", list(options), key=f"{kind}_snapshot",
+        help="The final standings are projected from the championship state at the end of "
+             "this round — only completed rounds carry information. Auto picks the "
+             "season's last completed round; for a completed season an earlier round "
+             "gives a genuine retro-forecast to compare against the actual final table.")
+    return options[choice]
+
+
 def first_backtest_control(kind, completed):
     """Sidebar selectbox picking the first round the backtest predicts.
 
@@ -580,8 +704,11 @@ def first_backtest_control(kind, completed):
     explicit round differs per pipeline: the race backtest can predict
     round 2 (trained on round 1 only), while the qualifying anchor model
     needs each driver's previous quali result — which round-1 entrants
-    don't have — so qualifying backtests start at round 3. Returns the
-    equivalent `min_train_rounds` for the pipeline.
+    don't have — so qualifying backtests start at round 3. The championship
+    page reuses the same semantics (rounds completed before the first
+    leave-one-season-out forecast; its separate *Forecast as of* selectbox
+    picks the projection snapshot). Returns the equivalent
+    `min_train_rounds` for the pipeline.
     """
     skip = 2 if kind == "grid" else 1
     explicit = completed[skip:]
@@ -988,6 +1115,28 @@ def predicted_order_chart(rows, cut_lines, colors, slot_label="position"):
     return lanes
 
 
+def ranked_bars_chart(table, entrant_col, value_col, colors, x_label,
+                       n=None, value_format=".0f", axis_format=None):
+    """Horizontal team-colored bars for one ranked projection: the first row
+    renders as the top bar (pass the table sorted by the value, descending).
+    The generic base of probability_chart; the championship page uses it for
+    projected final points (all entrants, not just the top n). Render with
+    st.altair_chart(..., theme="streamlit")."""
+    data = table if n is None else table.head(n)
+    data = data[[entrant_col, "team", value_col]].copy()
+    teams = list(dict.fromkeys(data["team"]))
+    scale = alt.Scale(domain=teams,
+                      range=[readable_color(colors.get(t, "#999999")) for t in teams])
+    return alt.Chart(data).mark_bar().encode(
+        y=alt.Y(f"{entrant_col}:N", title=None, sort=list(data[entrant_col])),
+        x=alt.X(f"{value_col}:Q", title=x_label,
+                axis=alt.Axis(format=axis_format or value_format)),
+        color=alt.Color("team:N", scale=scale, legend=None),
+        tooltip=[f"{entrant_col}:N", "team:N",
+                 alt.Tooltip(f"{value_col}:Q", format=value_format)],
+    ).properties(height=30 + 28 * len(data))
+
+
 def probability_chart(table, colors, n=10, x_label="model probability"):
     """Top-n driver probabilities as a horizontal bar chart, one bar per
     driver in their team's color.
@@ -998,14 +1147,5 @@ def probability_chart(table, colors, n=10, x_label="model probability"):
     probability table (driver, team, probability), sorted by probability
     descending (the top pick first) — the first driver renders as the top bar.
     """
-    data = table.head(n)[["driver", "team", "probability"]].copy()
-    teams = list(dict.fromkeys(data["team"]))
-    scale = alt.Scale(domain=teams,
-                      range=[readable_color(colors.get(t, "#999999")) for t in teams])
-    return alt.Chart(data).mark_bar().encode(
-        y=alt.Y("driver:N", title=None, sort=list(data["driver"])),
-        x=alt.X("probability:Q", title=x_label, axis=alt.Axis(format="%")),
-        color=alt.Color("team:N", scale=scale, legend=None),
-        tooltip=["driver:N", "team:N",
-                 alt.Tooltip("probability:Q", format=".1%")],
-    ).properties(height=30 + 28 * len(data))
+    return ranked_bars_chart(table, "driver", "probability", colors, x_label,
+                             n=n, value_format=".1%", axis_format="%")

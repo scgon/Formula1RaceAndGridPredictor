@@ -1,7 +1,7 @@
 """Milestone prediction: pole sitter, race winner, race podium, first
-retirement, fastest-lap driver, sprint pole sitter or sprint winner — ONE
-small binary classifier per run, selected with the CLI --milestone flag or
-the web-app Milestone selectbox.
+retirement, fastest-lap driver, sprint pole sitter, sprint winner or
+championship winner — ONE small binary classifier per run, selected with
+the CLI --milestone flag or the web-app Milestone selectbox.
 
 The selected model scores every driver of the target round with P(driver
 achieves the milestone); the top probability is the predicted driver. The
@@ -32,6 +32,19 @@ derived from race lap data, which neither of the other two pipelines
 collects, so this pipeline keeps its own season CSV
 (extras_season_{year}.csv); the podium target is derived from the stored
 finish column (classified top three), like the sprint targets.
+
+The championship model is the one season-level target: it scores every
+driver's chance of winning the season's DRIVER championship from the title
+standings before the round (points incl. sprint points, standing, gap to
+the leader) plus form, reliability and practice-pace signals. Its label is
+only known once a season ends, so it trains CROSS-SEASON: champion_history
+builds the pool from every bundled race season before the target year
+(data/season_*.csv — the race CSVs cover 2018+ and store everything the
+champion features need), never from the target season's own rounds
+(reviewing a completed season still trains only on seasons before it — no
+hindsight leakage; an in-progress season's snapshots carry no label at
+all). The standings exist before qualifying, so this model also runs in
+prequali mode; its naive baseline is the current points leader.
 
 These are classifiers, not regressors, so the model factory, the
 hyperparameter tuner (pooled cross-validated log loss instead of MAE) and
@@ -237,6 +250,37 @@ SPRINT_WIN_FEATURES = [
     "team_id",
 ]
 
+# The championship model is the one cross-season target: it does not train
+# on the target season's own rounds at all (see CHAMPION_TARGETS' entry and
+# champion_history below) — the label "this driver won this season's title"
+# only exists once a season is complete, so training on earlier rounds of
+# the same season would be hindsight leakage, and an in-progress season's
+# rounds carry no label at all. Features are the title-standings state
+# before the round (corrected standings: race points plus the era's sprint
+# points, since the stored `points` column is race-session points only)
+# plus the form / reliability / practice-pace signals the race-milestone
+# models share. Deliberately no team_id: the pool spans many seasons, and
+# the per-frame categorical codes of eight concatenated seasons would not
+# identify a team consistently.
+CHAMPION_FEATURES = [
+    "round",
+    "rounds_remaining",
+    "champ_points_before",
+    "champ_standing_before",
+    "champ_gap_before",
+    "driver_wins_before",
+    "driver_podiums_before",
+    "driver_form_3",
+    "driver_form_season",
+    "driver_dnf_rate_season",
+    "team_title_points_before",
+    "grid",
+    "quali_delta",
+    "fp_best_delta",
+    "fp_race_pace_delta",
+    "fp_laps",
+]
+
 TARGETS = {
     "pole": {
         "label": "Pole position",
@@ -311,6 +355,27 @@ TARGETS = {
         "baseline_sort": (("sprint_quali_pos", True), ("driver_number", True)),
         "baseline_note": "the sprint pole sitter (sprint grid P1)",
         "pre_scored": True,
+    },
+    "champion": {
+        "label": "Championship winner",
+        "column": "champion",
+        # every entrant is scored: `points` is never NaN (the upcoming-round
+        # loaders default it to 0.0), so the model ranks the full field in
+        # post, pre AND prequali modes alike
+        "rows_column": "points",
+        # masks the HISTORY pool, not the target frame (season_history)
+        "train_columns": ("finish",),
+        # the standings are known before qualifying, so this model also
+        # predicts a round whose quali has not run
+        "prequali": True,
+        "features": CHAMPION_FEATURES,
+        "baseline_sort": (("champ_points_before", False),
+                          ("driver_wins_before", False),
+                          ("driver_number", True)),
+        "baseline_note": "the current championship leader (most points, then most wins)",
+        # trains on complete seasons BEFORE the target year (champion_history),
+        # never on the target season's own rounds — see CHAMPION_FEATURES
+        "season_history": True,
     },
 }
 
@@ -650,6 +715,147 @@ def build_features(data):
     return df
 
 
+# --- championship model (cross-season target) --------------------------------
+
+def _sprint_points(year):
+    """Points awarded per sprint finishing position in `year`'s rules — the
+    stored `points` column is race-session points only (fastest-lap point
+    included when the era had it), so the title standings are computed as
+    race points plus this mapping. Sprints did not exist before 2021."""
+    if year <= 2020:
+        return {}
+    if year == 2021:
+        return {1: 3.0, 2: 2.0, 3: 1.0}
+    return {1: 8.0, 2: 7.0, 3: 6.0, 4: 5.0, 5: 4.0, 6: 3.0, 7: 2.0, 8: 1.0}
+
+
+def season_complete(year, schedule, now=None):
+    """Whether the `year` championship is decided in the data. Any year
+    before the current one is over (F1 seasons never run into the next
+    calendar year and the bundled CSVs are kept complete); the current
+    year is complete once its calendar holds no un-run race."""
+    now = utc_now() if now is None else now
+    if year < now.year:
+        return True
+    for _, row in schedule.iterrows():
+        race_utc = session_utc(row, "Race")
+        if race_utc is None or race_utc > now:
+            return False
+    return True
+
+
+def add_championship_columns(df, year, total_rounds, complete):
+    """Championship standings features + champion label for ONE season's
+    feature frame (the target season's extras frame or a history frame —
+    both must already have run through build_features, since the label's
+    tie-breaks use the derived winner/podium columns).
+
+    Adds the corrected title points (race points plus the era's sprint
+    points), the driver's standings state before each round (all shift(1)
+    style — a round's own sessions never inform its "before" features, so
+    an upcoming round's rows carry the standings through the last
+    completed round), the team's title points, the rounds remaining, and
+    the `champion` flag: 1 on every row of the season's title winner once
+    the season is complete, all-0 while it runs (the same unknown-outcome
+    convention the pre-mode loaders use for the other milestones)."""
+    df = df.copy()
+    by_driver = df.groupby("driver_number", sort=False)
+    df["title_points"] = (df["points"].fillna(0.0)
+                          + df["sprint_finish"].map(_sprint_points(year)).fillna(0.0))
+    df["champ_points_before"] = by_driver["title_points"].transform(
+        lambda s: s.cumsum().shift(1)).fillna(0.0)
+    leader = df.groupby("round", sort=False)["champ_points_before"].transform("max")
+    # rank(ascending=False): the points leader holds standing 1, ties share it
+    df["champ_standing_before"] = df.groupby("round", sort=False)[
+        "champ_points_before"].rank(method="min", ascending=False)
+    df["champ_gap_before"] = (leader - df["champ_points_before"]).fillna(0.0)
+    df["rounds_remaining"] = float(total_rounds) - df["round"]
+    # team title points per round, accumulated per driver like the pipeline's
+    # other team-point features (a driver who misses rounds accumulates less)
+    df["team_title_points"] = df.groupby(["round", "team"], sort=False)[
+        "title_points"].transform("sum")
+    df["team_title_points_before"] = by_driver["team_title_points"].transform(
+        lambda s: s.cumsum().shift(1)).fillna(0.0)
+    if complete:
+        totals = df.groupby("driver").agg(
+            pts=("title_points", "sum"), wins=("winner", "sum"), pod=("podium", "sum"))
+        # title points, then the F1 countback criteria (wins, podiums) — a
+        # full tie keeps the alphabetically first driver, deterministically
+        champion_driver = str(totals.sort_values(
+            ["pts", "wins", "pod"], ascending=[False, False, False]).index[0])
+        df["champion"] = (df["driver"] == champion_driver).astype(int)
+    else:
+        df["champion"] = 0
+    return df
+
+
+def _champion_history_frame(raw):
+    """One bundled race-season CSV in the extras feature shape: the champion
+    pool reuses build_features so every form/history feature is computed
+    exactly like the target season's frame, but the race CSVs don't store
+    the extras-only columns — derive them (quali positions from best quali
+    times, the winner/dnf flags from finish/status, empty fp12 pace). Only
+    the champion model's features are consumed downstream; the synthesized
+    columns exist so the shared build_features can run."""
+    df = raw.copy()
+    df["driver_number"] = df["driver_number"].astype(str)
+    df = df.sort_values(["round", "driver_number"]).reset_index(drop=True)
+    df["quali_pos"] = df.groupby("round")["quali_time"].rank(method="min")
+    df["winner"] = (df["finish"] == 1).astype(int)
+    df["dnf"] = [int(pd.notna(finish) and not _finished_like(status))
+                 for finish, status in zip(df["finish"], df["status"])]
+    df["fastest_lap"] = 0
+    df["fp12_best_delta"] = np.nan
+    df["fp12_race_pace_delta"] = np.nan
+    return df
+
+
+def champion_history(year):
+    """Training pool for the championship model: one snapshot frame per
+    bundled race season before `year` (data/season_*.csv — read from disk,
+    no downloads; the extras CSVs only cover the latest seasons, while the
+    race CSVs go back to 2018 and store everything the champion features
+    need). Every pool season completed before the target one started, so
+    training on it never leaks the target season's outcome. Returns an
+    empty frame when no earlier season is bundled."""
+    frames = []
+    for path in sorted(common.DATA_DIR.glob("season_*.csv")):
+        try:
+            season_year = int(path.stem.split("_")[1])
+        except (IndexError, ValueError):
+            continue
+        if season_year >= year:
+            continue
+        try:
+            raw = pd.read_csv(path, dtype={"driver_number": str})
+        except (OSError, ValueError):
+            continue
+        if raw.empty:
+            continue
+        feats = build_features(_champion_history_frame(raw))
+        feats = add_championship_columns(
+            feats, season_year, int(feats["round"].max()), complete=True)
+        feats["season"] = season_year
+        frames.append(feats)
+    if not frames:
+        print(f"No bundled race seasons before {year} — the championship model has no training history")
+        return pd.DataFrame()
+    pool = pd.concat(frames, ignore_index=True)
+    seasons = ", ".join(str(int(f["season"].iloc[0])) for f in frames)
+    print(f"Championship history: {len(frames)} completed season(s) ({seasons}), "
+          f"{len(pool)} driver-round records")
+    return pool
+
+
+def _train_rounds_count(train):
+    """Rounds a trained model saw: the champion pool concatenates seasons
+    whose round numbers repeat, so count unique (season, round) pairs
+    there and unique rounds everywhere else."""
+    if "season" in train.columns:
+        return int(train.groupby(["season", "round"]).ngroups)
+    return int(train["round"].nunique())
+
+
 # --- models ------------------------------------------------------------------
 
 def usable_features(frame, feature_names):
@@ -788,18 +994,31 @@ def actual_drivers(features, round_number, name):
     return set(rows["driver"])
 
 
-def train_model(features, target_round, name, profile="fast"):
-    """Fit one milestone classifier on all rounds before `target_round`.
+def train_model(features, target_round, name, profile="fast", history=None):
+    """Fit one milestone classifier on its training set.
+
+    Every milestone but the champion trains on all rounds before
+    `target_round` of the target season. The champion model is the
+    cross-season exception (TARGETS["season_history"]): its label — "this
+    driver won this season's title" — is a season-level outcome, so it
+    trains on `history` (the complete earlier seasons of champion_history)
+    instead; the target season's own rounds never enter its training set.
 
     Returns (model, train frame, used feature list, tuned hyperparameters);
     raises ValueError when there is no training data or no positive
     examples (a classifier cannot be fit on a single class).
     """
     spec = TARGETS[name]
-    mask = features["round"] < target_round
-    for col in spec["train_columns"]:
-        mask &= features[col].notna()
-    train = features[mask]
+    if spec.get("season_history"):
+        if history is None or history.empty:
+            raise ValueError("no championship training history (no completed "
+                             "earlier seasons are bundled)")
+        train = history[history[list(spec["train_columns"])].notna().all(axis=1)]
+    else:
+        mask = features["round"] < target_round
+        for col in spec["train_columns"]:
+            mask &= features[col].notna()
+        train = features[mask]
     if train.empty:
         raise ValueError(f"no training data before round {target_round}")
     target = train[spec["column"]].to_numpy(dtype=int)
@@ -834,16 +1053,18 @@ def predict_round(model, features, target_round, name, use_features=None):
     return rows.sort_values("pred_rank")
 
 
-def backtest_records(features, min_train_rounds, profile="fast", milestone="pole"):
+def backtest_records(features, min_train_rounds, profile="fast", milestone="pole",
+                     history=None):
     """Rolling backtest of ONE milestone model (selected with the
     `milestone` key of TARGETS / the CLI --milestone flag / the web-app
-    Milestone selectbox); one metrics dict per predicted round.
+    Milestone selectbox); one metrics dict per predicted round. The champion
+    model additionally receives its cross-season `history` pool — every
+    round then trains on the same pool (the target season contributes no
+    training rows), so what varies per round is only the standings state
+    the model scores.
 
     Each record carries the hit flags for the model top pick, the model
     top-3 and the naive baseline, the predicted/baseline/actual driver
-    names, and the probability the model assigned to its own pick and to
-    the actual driver. Rounds without a first retirement (nobody retired)
-    score NaN when the first-retirement model is selected, so hit rates
     names, and the probability the model assigned to its own pick and to
     the actual driver. Rounds without a first retirement (nobody retired)
     score NaN when the first-retirement model is selected, so hit rates
@@ -874,14 +1095,14 @@ def backtest_records(features, min_train_rounds, profile="fast", milestone="pole
                "dnf_any": int(((features["round"] == r) & (features["dnf"] == 1)).any())}
         common.vprint(1, f"backtest round {r:>2}  {event}: training {spec['label'].lower()} model{tune_note}...")
         try:
-            model, train, used, _ = train_model(features, r, milestone, profile)
+            model, train, used, _ = train_model(features, r, milestone, profile, history)
         except ValueError:
             rec.update({"hit": np.nan, "top3": np.nan, "base": np.nan,
                         "top1": None, "actual": None, "baseline": None,
                         "pick_proba": np.nan, "actual_proba": np.nan})
             records.append(rec)
             continue
-        rec["train_rounds"] = int(train["round"].nunique())
+        rec["train_rounds"] = _train_rounds_count(train)
         ranked = predict_round(model, features, r, milestone, used)
         actual = actual_drivers(features, r, milestone)
         top1 = str(ranked.iloc[0]["driver"])
@@ -952,9 +1173,12 @@ def backtest_report(records, milestone="pole"):
         print(f"{title:<22}" + (f"{100 * rate:>9.0f}%" if pd.notna(rate) else "        –"))
 
 
-def final_predictions(features, target, profile="fast", milestone="pole"):
+def final_predictions(features, target, profile="fast", milestone="pole",
+                      history=None):
     """Train ONE final milestone model (the `milestone` key of TARGETS) on
-    rounds before `target` and score the target round's drivers.
+    its training set and score the target round's drivers — the rounds
+    before `target` for every milestone but the champion, whose model
+    trains on the cross-season `history` pool instead (see train_model).
 
     Returns a single entry holding the milestone name, the model, its
     training frame, the feature list it actually used, the hyperparameters
@@ -963,16 +1187,17 @@ def final_predictions(features, target, profile="fast", milestone="pole"):
     drivers when already known (milestones with pre_scored in TARGETS —
     pole, sprint pole and sprint winner — are all decided before the race,
     so they are scored even in pre mode; the other race milestones only in
-    post mode). When the model cannot train or the round has no eligible
-    candidates (e.g. a non-sprint weekend), the entry
-    carries an "error" message instead. Prints one live progress line
-    (streamed into the web app's log).
+    post mode; the champion only once the season is complete). When the
+    model cannot train or the round has no eligible candidates (e.g. a
+    non-sprint weekend), the entry carries an "error" message instead.
+    Prints one live progress line (streamed into the web app's log).
     """
     spec = TARGETS[milestone]
     tune_note = " (tuning hyperparameters)" if profile == "optimized" else ""
     common.vprint(1, f"training final {spec['label'].lower()} model{tune_note}...")
     try:
-        model, train, used, tuned = train_model(features, target, milestone, profile)
+        model, train, used, tuned = train_model(features, target, milestone, profile,
+                                                history)
     except ValueError as exc:
         return {"name": milestone, "error": str(exc)}
     table = predict_round(model, features, target, milestone, used)
@@ -994,7 +1219,7 @@ def final_predictions(features, target, profile="fast", milestone="pole"):
         "baseline": baseline_pick(target_rows(features, target, milestone), milestone),
         "actual": actual,
         "hit": (top1 in actual) if actual else None,
-        "train_rounds": int(train["round"].nunique()),
+        "train_rounds": _train_rounds_count(train),
     }
 
 
@@ -1036,8 +1261,9 @@ def importance_report(pred, width=24):
         print(f"  {row.feature:<{width}} {row.importance:+.3f}{spread}")
 
 
-def final_report(features, year, target, event_name, mode, profile="fast", milestone="pole"):
-    pred = final_predictions(features, target, profile, milestone)
+def final_report(features, year, target, event_name, mode, profile="fast",
+                 milestone="pole", history=None):
+    pred = final_predictions(features, target, profile, milestone, history)
     spec = TARGETS[milestone]
     print(f"\n=== Prediction: {year} {event_name} (round {target}) — {spec['label']} ===")
     if mode == "pre" and spec.get("pre_scored"):
@@ -1045,8 +1271,12 @@ def final_report(features, year, target, event_name, mode, profile="fast", miles
               "before the race), so the model's call is scored below")
     if mode == "prequali":
         print("pre-quali mode: the weekend's qualifying has not happened yet, so this model")
-        print("predicts from practice, sprint and season-form information — run again later")
-        print("in the weekend to score the call")
+        if milestone == "champion":
+            print("predicts from the standings, practice and season form — its call is")
+            print("scored once the season is complete")
+        else:
+            print("predicts from practice, sprint and season-form information — run again later")
+            print("in the weekend to score the call")
     if "error" in pred:
         print(f"\nNo model — {pred['error']}")
         return pred
@@ -1195,7 +1425,7 @@ def resolve_target(args, year, schedule, data):
             return int(row["RoundNumber"]), "pre", str(row["EventName"])
         if prequali_ok:
             print(f"\nQualifying for the next round ({row['EventName']}) has not happened yet,")
-            print(f"so the pole model predicts it before qualifying runs")
+            print(f"so the {milestone.replace('_', ' ')} model predicts it before qualifying runs")
             _prequali_note(row, now)
             return int(row["RoundNumber"]), "prequali", str(row["EventName"])
         last_event = str(data.loc[data["round"] == completed[-1], "event"].iloc[0])
@@ -1211,21 +1441,23 @@ def resolve_target(args, year, schedule, data):
 def main():
     parser = argparse.ArgumentParser(
         description="F1 milestone prediction (pole, winner, podium, first retirement, "
-                    "fastest lap, sprint pole, sprint winner) using fastf1 and gradient boosting")
+                    "fastest lap, sprint pole, sprint winner, championship winner) "
+                    "using fastf1 and gradient boosting")
     parser.add_argument("--season", type=int, default=None,
                         help="season year (default: current year, falls back to previous year)")
     parser.add_argument("--predict-round", type=int, default=None,
                         help="round number to predict (default: auto-select)")
     parser.add_argument("--next", action="store_true",
                         help="predict the next race weekend's milestones (the race milestones "
-                             "require its qualifying to be done; the pole and sprint models "
-                             "also predict before it)")
+                             "require its qualifying to be done; the pole, sprint and "
+                             "championship models also predict before it)")
     parser.add_argument("--min-train-rounds", type=int, default=MIN_TRAIN_ROUNDS,
                         help="minimum completed rounds needed before first prediction (default: 5)")
     parser.add_argument("--milestone", choices=list(TARGETS), default="pole",
                         help="which milestone model to run: pole, winner, podium, "
-                             "first_dnf, fastest_lap, sprint_pole or sprint_win — only this "
-                             "one model is trained and backtested (default: pole)")
+                             "first_dnf, fastest_lap, sprint_pole, sprint_win or "
+                             "champion — only this one model is trained and "
+                             "backtested (default: pole)")
     parser.add_argument("--model", choices=common.MODEL_PROFILES, default="fast",
                         help="model profile: 'fast' uses fixed hyperparameters, "
                              "'optimized' tunes them per model by minimizing "
@@ -1260,13 +1492,22 @@ def main():
 
     spec = TARGETS[args.milestone]
     features = build_features(data)
+    history = None
+    if args.milestone == "champion":
+        # championship standings features + label for the target season, and
+        # the cross-season training pool (complete seasons before this one)
+        features = add_championship_columns(
+            features, year, int(schedule["RoundNumber"].max()),
+            season_complete(year, schedule))
+        history = champion_history(year)
     print(f"\nMilestone: {spec['label'].lower()}")
     print(f"Dataset: {features['round'].nunique()} rounds, {len(features)} driver-round records")
     print(f"Features: {', '.join(spec['features'])}")
 
     backtest_report(backtest_records(features, args.min_train_rounds, args.model,
-                                     args.milestone), args.milestone)
-    final_report(features, year, target, event_name, mode, args.model, args.milestone)
+                                     args.milestone, history), args.milestone)
+    final_report(features, year, target, event_name, mode, args.model, args.milestone,
+                 history)
 
 
 if __name__ == "__main__":

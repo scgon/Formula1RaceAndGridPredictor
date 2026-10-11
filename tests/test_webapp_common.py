@@ -195,3 +195,18 @@ def test_probability_chart_builds_offline():
                           "probability": [0.5, 0.3, 0.2]})
     chart = wc.probability_chart(table, {"T1": "#ff0000", "T2": "#0000ff"})
     assert chart.to_dict()
+
+
+def test_ranked_bars_chart_builds_offline():
+    # the championship page's projected-points bars: the whole field, sorted
+    # descending (first row renders as the top bar), height scales with rows
+    table = pd.DataFrame({"driver": ["A", "B", "C"], "team": ["T1", "T2", "T1"],
+                          "pred_final": [420.0, 380.5, 15.0]})
+    chart = wc.ranked_bars_chart(table, "driver", "pred_final",
+                                 {"T1": "#ff0000", "T2": "#0000ff"},
+                                 "projected final points")
+    assert chart.to_dict()
+    assert chart.to_dict()["height"] == 30 + 28 * 3
+    # a head(n) subset renders just the top n bars (probability_chart reuse)
+    top = wc.ranked_bars_chart(table, "driver", "pred_final", {}, "pts", n=2)
+    assert top.to_dict()["height"] == 30 + 28 * 2

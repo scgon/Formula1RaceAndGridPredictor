@@ -18,8 +18,9 @@ import f1_common
 import webapp_common as wc
 
 st.title("Formula 1 Race & Grid Predictor")
-st.caption("Machine-learning predictions for F1 race results and qualifying grids, "
-           "built on [fastf1](https://github.com/theOehrly/fastf1) data and gradient boosting.")
+st.caption("Machine-learning predictions for F1 race results, qualifying grids, weekend "
+           "milestones and championship standings, built on "
+           "[fastf1](https://github.com/theOehrly/fastf1) data and gradient boosting.")
 
 # --- next race banner -----------------------------------------------------
 try:
@@ -45,9 +46,9 @@ except Exception:
     st.caption("Race calendar unavailable (offline) — predictions still work from cached data.")
 
 # --- the pipelines ---------------------------------------------------------
-st.subheader("Three pipelines, six models plus seven milestone classifiers")
+st.subheader("Four pipelines: race and qualifying order, weekend milestones, and the championship table")
 
-race_col, grid_col, extras_col = st.columns(3)
+race_col, grid_col, extras_col, champ_col = st.columns(4)
 
 with race_col:
     st.markdown("##### :material/sports_score: Race prediction")
@@ -94,7 +95,7 @@ with grid_col:
 with extras_col:
     st.markdown("##### :material/emoji_events: Milestones & extras")
     st.markdown(
-        "Seven small classifiers, each predicting one weekend milestone — pick one and "
+        "Eight small classifiers, each predicting one weekend milestone — pick one and "
         "only it runs.\n\n"
         "- **Pole position** — day-before-quali information (FP1/FP2, sprint quali, quali form)\n"
         "- **Race winner** — from the grid, practice pace, sprint results and form\n"
@@ -102,7 +103,8 @@ with extras_col:
         "- **First retirement** — adds driver/team reliability history\n"
         "- **Fastest lap** — one-lap pace, race pace and past fastest laps\n"
         "- **Sprint pole / Sprint winner** — Friday practice plus past sprint and quali form (sprint weekends only)\n"
-        "- **Baselines** — best quali form, grid P1, most retirements, most fastest laps, sprint pole sitter\n"
+        "- **Championship winner** — every driver's title chance from the standings, form and practice pace\n"
+        "- **Baselines** — best quali form, grid P1, most retirements, most fastest laps, sprint pole sitter, points leader\n"
     )
     with st.expander("Milestone models"):
         st.markdown(
@@ -110,26 +112,55 @@ with extras_col:
             "prediction. First-retirement and fastest-lap targets come from race lap "
             "data, so this pipeline keeps its own season files (`extras_season_*.csv`); "
             "the sprint targets are derived from the stored sprint quali and sprint "
-            "race results."
+            "race results. The championship winner model instead trains on every "
+            "bundled *past* season (`season_*.csv`), because a season's champion is "
+            "only known once it ends."
         )
     wc.page_link("webapp/page_extras.py", label="Open milestones & extras", icon=":material/emoji_events:")
+
+with champ_col:
+    st.markdown("##### :material/leaderboard: Championship prediction")
+    st.markdown(
+        "Projects the **final championship points table** — as of any completed round — "
+        "for drivers or constructors.\n\n"
+        "- **Remaining-points model** — predicts the points still to be scored, anchored "
+        "at the current standings\n"
+        "- **Direct model** — predicts the final points total outright\n"
+        "- **Baseline** — run-rate extrapolation (current points + average per round × "
+        "remaining rounds)\n"
+    )
+    with st.expander("Championship features"):
+        st.markdown(
+            "- Points so far, scoring rate (season & last 3 rounds) and the run-rate "
+            "projection itself\n"
+            "- Standings position, gap to the leader\n"
+            "- Finish and quali-gap form, wins, podiums, retirement record\n"
+            "- Team points, pace and reliability\n"
+            "- Driver and team identity (categorical) — learned from past seasons\n\n"
+            "A season's final points are only known once it ends, so models train on "
+            "every complete bundled season and are backtested leave-one-season-out; the "
+            "forecast season never trains its own forecast."
+        )
+    wc.page_link("webapp/page_championship.py", label="Open championship prediction",
+                 icon=":material/leaderboard:")
 
 st.divider()
 
 # --- methodology -----------------------------------------------------------
 st.subheader("How models are evaluated")
 st.markdown(
-    "Every pipeline runs a **rolling backtest** over the season: for each completed round, "
-    "the models are retrained on all earlier rounds only, then predict that round. "
-    "Reported metrics: mean absolute position error (MAE), podium hit rate, pole/winner "
+    "Every pipeline runs a **rolling backtest**: for each completed round (or season, for "
+    "the championship pipeline — leave-one-season-out, each past season forecast using "
+    "only earlier complete seasons), the models are retrained on earlier data only, then "
+    "predict. Reported metrics: mean absolute error (positions or points), podium/champion "
     "hit rate and rank correlation — always compared against the naive baseline. "
-    "Models are `HistGradientBoostingRegressor` (the two order pipelines) or "
+    "Models are `HistGradientBoostingRegressor` (the order pipelines) or "
     "`HistGradientBoostingClassifier` (the milestone classifiers) with a fixed seed: "
     "identical data gives identical predictions.\n\n"
     "Each prediction page offers two **model profiles**: *Fast* (fixed hyperparameters, "
     "quickest run) and *Optimized* (every model tunes its hyperparameters by minimizing "
     "cross-validated error — MAE for the order models, log loss for the milestone "
-    "classifiers — on the rounds it trains on; usually better, but a slower run). "
+    "classifiers — on the data it trains on; usually better, but a slower run). "
     "*Optimized* is only offered when the app runs locally — the hosted deployment "
     "disables it to keep runs quick."
 )
@@ -162,7 +193,7 @@ else:
 
 with st.expander("Prefer the command line?"):
     st.markdown(
-        "Both pipelines also run as command-line scripts. See the "
+        "All pipelines also run as command-line scripts. See the "
         "[GitHub README](https://github.com/scgon/Formula1RaceAndGridPredictor#quick-start-cli) "
         "for setup, dependencies and the full list of flags. This hosted app runs on a free "
         "shared cloud container — if it feels throttled or hits rate limits, running the "
