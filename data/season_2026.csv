@@ -351,25 +351,25 @@ round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_ra
 16,Bahrain Grand Prix,77,BOT,Cadillac F1 Team,19.0,98.611,22.0,0.0,Retired,,,,,,,3.4810000000000088
 16,Bahrain Grand Prix,81,PIA,McLaren,6.0,95.762,6.0,8.0,Finished,,,,,,,0.632000000000005
 16,Bahrain Grand Prix,87,BEA,Haas F1 Team,16.0,97.98,14.0,0.0,Finished,,,,,,,2.8500000000000085
-17,Singapore Grand Prix,1,NOR,McLaren,5.0,91.712,4.0,12.0,Finished,,,,5.0,8.0,-3.0,0.33899999999999864
+17,Singapore Grand Prix,1,NOR,McLaren,5.0,91.712,4.0,12.0,Finished,,,,5.0,8.0,-3.0,0.3389999999999986
 17,Singapore Grand Prix,10,GAS,Alpine F1 Team,7.0,92.225,11.0,0.0,Lapped,,,,10.0,9.0,1.0,0.8519999999999897
 17,Singapore Grand Prix,11,PER,Cadillac F1 Team,17.0,95.123,17.0,0.0,Lapped,,,,20.0,21.0,-1.0,3.75
-17,Singapore Grand Prix,12,ANT,Mercedes,4.0,91.562,3.0,15.0,Finished,,,,7.0,4.0,3.0,0.18899999999999295
+17,Singapore Grand Prix,12,ANT,Mercedes,4.0,91.562,3.0,15.0,Finished,,,,7.0,4.0,3.0,0.1889999999999929
 17,Singapore Grand Prix,14,ALO,Aston Martin,20.0,94.223,16.0,0.0,Lapped,,,,15.0,11.0,4.0,2.8499999999999943
-17,Singapore Grand Prix,16,LEC,Ferrari,2.0,91.427,2.0,18.0,Finished,,,,3.0,3.0,0.0,0.054000000000002046
+17,Singapore Grand Prix,16,LEC,Ferrari,2.0,91.427,2.0,18.0,Finished,,,,3.0,3.0,0.0,0.054000000000002
 17,Singapore Grand Prix,18,STR,Aston Martin,21.0,94.946,20.0,0.0,Retired,,,,18.0,22.0,-4.0,3.5729999999999933
 17,Singapore Grand Prix,23,ALB,Williams,16.0,94.289,18.0,0.0,Retired,,,,19.0,15.0,4.0,2.915999999999997
 17,Singapore Grand Prix,27,HUL,Audi,10.0,92.784,8.0,4.0,Finished,,,,12.0,7.0,5.0,1.4110000000000014
 17,Singapore Grand Prix,3,VER,Red Bull,1.0,91.373,1.0,25.0,Finished,,,,1.0,1.0,0.0,0.0
 17,Singapore Grand Prix,30,LAW,RB F1 Team,8.0,92.319,7.0,6.0,Finished,,,,8.0,5.0,3.0,0.945999999999998
-17,Singapore Grand Prix,31,OCO,Haas F1 Team,12.0,93.323,13.0,0.0,Lapped,,,,16.0,10.0,6.0,1.9499999999999886
+17,Singapore Grand Prix,31,OCO,Haas F1 Team,12.0,93.323,13.0,0.0,Lapped,,,,16.0,10.0,6.0,1.9499999999999889
 17,Singapore Grand Prix,41,LIN,RB F1 Team,9.0,92.498,15.0,0.0,Lapped,,,,17.0,13.0,4.0,1.125
 17,Singapore Grand Prix,43,COL,Alpine F1 Team,15.0,93.261,21.0,0.0,Retired,,,,11.0,19.0,-8.0,1.887999999999991
-17,Singapore Grand Prix,44,HAM,Ferrari,3.0,91.496,6.0,8.0,Finished,,,,6.0,2.0,4.0,0.12299999999999045
+17,Singapore Grand Prix,44,HAM,Ferrari,3.0,91.496,6.0,8.0,Finished,,,,6.0,2.0,4.0,0.1229999999999904
 17,Singapore Grand Prix,5,BOR,Audi,14.0,93.658,22.0,0.0,Retired,,,,14.0,16.0,-2.0,2.2849999999999966
 17,Singapore Grand Prix,55,SAI,Williams,13.0,93.526,14.0,0.0,Lapped,,,,22.0,12.0,10.0,2.1529999999999916
 17,Singapore Grand Prix,6,HAD,Red Bull,22.0,,10.0,1.0,Finished,,,,9.0,18.0,-9.0,
 17,Singapore Grand Prix,63,RUS,Mercedes,19.0,91.747,9.0,2.0,Finished,,,,2.0,20.0,-18.0,0.3739999999999952
 17,Singapore Grand Prix,77,BOT,Cadillac F1 Team,18.0,95.984,19.0,0.0,Lapped,,,,21.0,17.0,4.0,4.61099999999999
-17,Singapore Grand Prix,81,PIA,McLaren,6.0,91.86,5.0,10.0,Finished,,,,4.0,14.0,-10.0,0.48699999999999477
+17,Singapore Grand Prix,81,PIA,McLaren,6.0,91.86,5.0,10.0,Finished,,,,4.0,14.0,-10.0,0.4869999999999947
 17,Singapore Grand Prix,87,BEA,Haas F1 Team,11.0,92.908,12.0,0.0,Lapped,,,,13.0,6.0,7.0,1.5349999999999966
