@@ -161,6 +161,14 @@ else:
     pos_fmt = lambda v: "" if pd.isna(v) else f"P{v:.0f}"
     points_fmt = lambda v: "" if pd.isna(v) else f"{v:.0f}"
     error_fmt = lambda v: "" if pd.isna(v) else f"{int(round(v)):+d}"
+    rate_fmt = lambda v: "" if pd.isna(v) else f"{v:.1f}"
+
+    def pace(final):
+        """Points per round a projection implies for the rounds still to run
+        (projected final − points now, spread over rounds remaining) — blank
+        in the converged state, where no rounds are left to forecast."""
+        return ((final - ordered["points_so_far"]) / ordered["rounds_remaining"]).where(
+            ordered["rounds_remaining"] > 0)
 
     disp = pd.DataFrame({
         "Remaining model": ordered["pred_pos"].to_numpy(),
@@ -168,8 +176,11 @@ else:
         "Now": ordered["standings_pos"].to_numpy(),
         "Points now": ordered["points_so_far"].to_numpy(),
         "Final points — remaining": ordered["pred_final"].to_numpy(),
+        "Pts/round — remaining": pace(ordered["pred_final"]).to_numpy(),
         "Final points — direct": ordered["direct_final"].to_numpy(),
+        "Pts/round — direct": pace(ordered["direct_final"]).to_numpy(),
         "Baseline points": ordered[entrant].map(baseline_finals).to_numpy(),
+        "Avg pts/round": ordered["points_per_round"].to_numpy(),
     }).reset_index(drop=True)
     name_col = "Driver" if championship == "drivers" else "Team"
     # constructors: the entrant IS the team, so one team column is both
@@ -178,7 +189,9 @@ else:
         disp.insert(4, "Team", ordered["team"].to_numpy())
     fmt = {"Remaining model": pos_fmt, "Direct model": pos_fmt, "Now": pos_fmt,
            "Points now": points_fmt, "Final points — remaining": points_fmt,
-           "Final points — direct": points_fmt, "Baseline points": points_fmt}
+           "Pts/round — remaining": rate_fmt, "Final points — direct": points_fmt,
+           "Pts/round — direct": rate_fmt, "Baseline points": points_fmt,
+           "Avg pts/round": rate_fmt}
     if mode == "post":
         disp["Actual final points"] = ordered["final"].to_numpy()
         disp["Error (remaining)"] = (ordered["pred_final"] - ordered["final"]).to_numpy()
@@ -197,6 +210,10 @@ else:
     else:
         styled = styled.map(lambda team: wc.team_css(team, colors), subset=["Team"])
     st.dataframe(styled, width="stretch", hide_index=True)
+    st.caption("*Pts/round* — the pace each projection implies for the rounds still to "
+               "run: projected final points minus points now, divided by rounds "
+               "remaining. *Avg pts/round* — the entrant's season average so far, the "
+               "exact rate the run-rate baseline extrapolates.")
 
     # --- champion callouts ---------------------------------------------------
     top = main.iloc[0]
