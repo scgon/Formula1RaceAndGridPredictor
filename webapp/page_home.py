@@ -46,9 +46,9 @@ except Exception:
     st.caption("Race calendar unavailable (offline) — predictions still work from cached data.")
 
 # --- the pipelines ---------------------------------------------------------
-st.subheader("Four pipelines: race and qualifying order, weekend milestones, and the championship table")
+st.subheader("Four pipelines: race and qualifying order, the championship table, and weekend milestones")
 
-race_col, grid_col, extras_col, champ_col = st.columns(4)
+race_col, grid_col, champ_col, extras_col = st.columns(4)
 
 with race_col:
     st.markdown("##### :material/sports_score: Race prediction")
@@ -92,32 +92,6 @@ with grid_col:
         )
     wc.page_link("webapp/page_quali.py", label="Open qualifying prediction", icon=":material/timer:")
 
-with extras_col:
-    st.markdown("##### :material/emoji_events: Milestones & extras")
-    st.markdown(
-        "Eight small classifiers, each predicting one weekend milestone — pick one and "
-        "only it runs.\n\n"
-        "- **Pole position** — day-before-quali information (FP1/FP2, sprint quali, quali form)\n"
-        "- **Race winner** — from the grid, practice pace, sprint results and form\n"
-        "- **Race podium** — every driver's percent chance of a top-three finish\n"
-        "- **First retirement** — adds driver/team reliability history\n"
-        "- **Fastest lap** — one-lap pace, race pace and past fastest laps\n"
-        "- **Sprint pole / Sprint winner** — Friday practice plus past sprint and quali form (sprint weekends only)\n"
-        "- **Championship winner** — every driver's title chance from the standings, form and practice pace\n"
-        "- **Baselines** — best quali form, grid P1, most retirements, most fastest laps, sprint pole sitter, points leader\n"
-    )
-    with st.expander("Milestone models"):
-        st.markdown(
-            "Each model scores every driver with a probability; the top pick is the "
-            "prediction. First-retirement and fastest-lap targets come from race lap "
-            "data, so this pipeline keeps its own season files (`extras_season_*.csv`); "
-            "the sprint targets are derived from the stored sprint quali and sprint "
-            "race results. The championship winner model instead trains on every "
-            "bundled *past* season (`season_*.csv`), because a season's champion is "
-            "only known once it ends."
-        )
-    wc.page_link("webapp/page_extras.py", label="Open milestones & extras", icon=":material/emoji_events:")
-
 with champ_col:
     st.markdown("##### :material/leaderboard: Championship prediction")
     st.markdown(
@@ -143,6 +117,32 @@ with champ_col:
         )
     wc.page_link("webapp/page_championship.py", label="Open championship prediction",
                  icon=":material/leaderboard:")
+
+with extras_col:
+    st.markdown("##### :material/emoji_events: Milestones & extras")
+    st.markdown(
+        "Eight small classifiers, each predicting one weekend milestone — pick one and "
+        "only it runs.\n\n"
+        "- **Pole position** — day-before-quali information (FP1/FP2, sprint quali, quali form)\n"
+        "- **Race winner** — from the grid, practice pace, sprint results and form\n"
+        "- **Race podium** — every driver's percent chance of a top-three finish\n"
+        "- **First retirement** — adds driver/team reliability history\n"
+        "- **Fastest lap** — one-lap pace, race pace and past fastest laps\n"
+        "- **Sprint pole / Sprint winner** — Friday practice plus past sprint and quali form (sprint weekends only)\n"
+        "- **Championship winner** — every driver's title chance from the standings, form and practice pace\n"
+        "- **Baselines** — best quali form, grid P1, most retirements, most fastest laps, sprint pole sitter, points leader\n"
+    )
+    with st.expander("Milestone models"):
+        st.markdown(
+            "Each model scores every driver with a probability; the top pick is the "
+            "prediction. First-retirement and fastest-lap targets come from race lap "
+            "data, so this pipeline keeps its own season files (`extras_season_*.csv`); "
+            "the sprint targets are derived from the stored sprint quali and sprint "
+            "race results. The championship winner model instead trains on every "
+            "bundled *past* season (`season_*.csv`), because a season's champion is "
+            "only known once it ends."
+        )
+    wc.page_link("webapp/page_extras.py", label="Open milestones & extras", icon=":material/emoji_events:")
 
 st.divider()
 

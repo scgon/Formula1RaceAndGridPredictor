@@ -13,8 +13,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 PIPELINES = [
     "pipelines/predict_race.py",
     "pipelines/predict_grid.py",
-    "pipelines/predict_extras.py",
     "pipelines/predict_championship.py",
+    "pipelines/predict_extras.py",
 ]
 
 

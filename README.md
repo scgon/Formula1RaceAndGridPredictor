@@ -1,6 +1,6 @@
 # Formula 1 Race & Grid Predictor
 
-A Python project that predicts Formula 1 race results, qualifying grids, weekend milestone outcomes and final championship standings using historical data from fastf1 and machine learning models built with scikit-learn.
+A Python project that predicts Formula 1 race results, qualifying grids, final championship standings and weekend milestone outcomes using historical data from fastf1 and machine learning models built with scikit-learn.
 
 [![Tests](https://github.com/scgon/Formula1RaceAndGridPredictor/actions/workflows/tests.yml/badge.svg)](https://github.com/scgon/Formula1RaceAndGridPredictor/actions/workflows/tests.yml)
 
@@ -12,8 +12,8 @@ This project combines four independent prediction pipelines with a Streamlit web
 
 - Race prediction: predict finishing positions for an upcoming or completed race
 - Grid prediction: predict qualifying positions for an upcoming or completed qualifying session
-- Milestone predictions: predict one selected target per run, such as pole sitter, race winner, race podium (top-three finish), first retirement, fastest lap, sprint pole, sprint winner, or championship winner
 - Championship prediction: project the final drivers' or constructors' championship points table as of any completed round
+- Milestone predictions: predict one selected target per run, such as pole sitter, race winner, race podium (top-three finish), first retirement, fastest lap, sprint pole, sprint winner, or championship winner
 
 The app and the CLI both use the same shared data-loading and training logic, so results stay consistent across interfaces.
 
@@ -26,16 +26,16 @@ The app and the CLI both use the same shared data-loading and training logic, so
 │   ├── f1_common.py               # shared data loading, feature building, tuning, reports
 │   ├── predict_race.py            # race pipeline
 │   ├── predict_grid.py            # qualifying/grid pipeline
-│   ├── predict_extras.py          # milestone pipeline
 │   ├── predict_championship.py    # championship standings pipeline
+│   ├── predict_extras.py          # milestone pipeline
 │   └── ...
 ├── webapp/
 │   ├── _bootstrap.py              # stale-module guard for live code pulls
 │   ├── page_home.py               # home page
 │   ├── page_race.py               # race prediction page
 │   ├── page_quali.py              # qualifying prediction page
-│   ├── page_extras.py             # milestone prediction page
 │   ├── page_championship.py       # championship prediction page
+│   ├── page_extras.py             # milestone prediction page
 │   └── webapp_common.py           # app glue, logging, tables, charts, run wrappers
 ├── notebooks/
 │   ├── race_predictions.ipynb     # interactive race pipeline notebook
@@ -108,8 +108,8 @@ The app has five pages:
 - Home: next race, data status, methodology overview
 - Race prediction: finish prediction and backtest analysis
 - Qualifying prediction: grid prediction and backtest analysis
-- Milestones & extras: pick one milestone model and review driver probabilities
 - Championship prediction: projected final points table for drivers or constructors
+- Milestones & extras: pick one milestone model and review driver probabilities
 
 ### CLI pipelines
 
@@ -122,13 +122,6 @@ python -u pipelines/predict_race.py --next
 # Qualifying prediction for the next qualifying session
 python -u pipelines/predict_grid.py --next
 
-# Milestone model for the next target round
-python -u pipelines/predict_extras.py --next
-python -u pipelines/predict_extras.py --next --milestone winner
-
-# Championship winner prediction for the current season
-python -u pipelines/predict_extras.py --next --milestone champion
-
 # Final championship table projection (drivers by default; add --championship constructors)
 python -u pipelines/predict_championship.py
 python -u pipelines/predict_championship.py --championship constructors
@@ -138,6 +131,13 @@ python -u pipelines/predict_championship.py --season 2025 --predict-round 10
 
 # Backtest the most recent seasons only (the backtest is the slow part)
 python -u pipelines/predict_championship.py --first-backtest-season 2023
+
+# Milestone model for the next target round
+python -u pipelines/predict_extras.py --next
+python -u pipelines/predict_extras.py --next --milestone winner
+
+# Championship winner prediction for the current season
+python -u pipelines/predict_extras.py --next --milestone champion
 
 # Specific season and round
 python -u pipelines/predict_race.py --season 2025 --predict-round 12
@@ -157,9 +157,9 @@ Common flags:
 --season YEAR
 --predict-round N
 --next
---milestone {pole,winner,podium,first_dnf,fastest_lap,sprint_pole,sprint_win,champion}
 --championship {drivers,constructors}   # championship pipeline
 --first-backtest-season YEAR            # championship backtest scope (default: auto)
+--milestone {pole,winner,podium,first_dnf,fastest_lap,sprint_pole,sprint_win,champion}
 --model {fast,optimized}
 --models {both,gain,direct}      # race pipeline
 --models {both,anchor,direct}    # grid pipeline
@@ -199,7 +199,21 @@ Key behavior:
 - Uses FP1/FP2 pace as the core set, with FP3 and sprint-race results included when available
 - Supports regular pre-quali predictions even though some features are still NaN before those sessions occur
 
-### 3) Milestone pipeline (`pipelines/predict_extras.py`)
+### 3) Championship pipeline (`pipelines/predict_championship.py`)
+
+This pipeline projects the final championship points table — drivers' or constructors', selected with `--championship` — as of any completed round.
+
+Key behavior:
+
+- Uses two models: remaining-points (final − points so far) vs direct (absolute final total); both are compared against a naive run-rate baseline (current points + season-average per round × remaining rounds)
+- A snapshot at round N includes round N itself — it is the championship state as of the end of that round, exactly what a live forecast sees
+- A mid-season snapshot cannot know its own season's final points, so the models train across seasons: every training row's target is an entrant's final points of a complete earlier season (`data/season_*.csv`; the target season never trains its own forecast)
+- The backtest is leave-one-season-out: every complete bundled season is forecast after each of its rounds, each forecast trained only on earlier complete seasons; a season's final round is skipped because there is nothing left to forecast
+- `--first-backtest-season YEAR` scopes the backtest to that season and later; the default (auto) forecasts every complete bundled season that has an earlier complete season to train on — the earliest bundled season is never forecast because its forecasts would have no training pool. The setting scopes the evaluation only: the final forecast always trains on every complete earlier season
+- Sprint points are derived from the stored sprint finishing positions using the era's scheme (none before 2021, 3-2-1 in 2021, 8-…-1 from 2022), reproducing the official standings of every bundled season
+- `--predict-round` retro-forecasts: project a completed season's standings as of an earlier round and compare against the actual final table; for a season in progress the projection is live, anchored at the last completed round
+
+### 4) Milestone pipeline (`pipelines/predict_extras.py`)
 
 This pipeline predicts one milestone at a time, chosen with `--milestone`.
 
@@ -220,20 +234,6 @@ The pipeline stores its own season CSVs (`data/extras_season_*.csv`) because rac
 
 The championship model is the one season-level target: it scores every driver's chance of winning the driver title from the standings before the round (points including the era's sprint points, championship position, gap to the leader) plus form, reliability and practice-pace signals. Because a season's champion is only known once the season ends, it never trains on the target season's own rounds — instead it trains on every bundled earlier season (`data/season_*.csv`, 2018+), so its backtest over a completed season is a genuine out-of-sample review and it can also predict before qualifying runs (the standings already exist). Its naive baseline is the current championship leader.
 
-### 4) Championship pipeline (`pipelines/predict_championship.py`)
-
-This pipeline projects the final championship points table — drivers' or constructors', selected with `--championship` — as of any completed round.
-
-Key behavior:
-
-- Uses two models: remaining-points (final − points so far) vs direct (absolute final total); both are compared against a naive run-rate baseline (current points + season-average per round × remaining rounds)
-- A snapshot at round N includes round N itself — it is the championship state as of the end of that round, exactly what a live forecast sees
-- A mid-season snapshot cannot know its own season's final points, so the models train across seasons: every training row's target is an entrant's final points of a complete earlier season (`data/season_*.csv`; the target season never trains its own forecast)
-- The backtest is leave-one-season-out: every complete bundled season is forecast after each of its rounds, each forecast trained only on earlier complete seasons; a season's final round is skipped because there is nothing left to forecast
-- `--first-backtest-season YEAR` scopes the backtest to that season and later; the default (auto) forecasts every complete bundled season that has an earlier complete season to train on — the earliest bundled season is never forecast because its forecasts would have no training pool. The setting scopes the evaluation only: the final forecast always trains on every complete earlier season
-- Sprint points are derived from the stored sprint finishing positions using the era's scheme (none before 2021, 3-2-1 in 2021, 8-…-1 from 2022), reproducing the official standings of every bundled season
-- `--predict-round` retro-forecasts: project a completed season's standings as of an earlier round and compare against the actual final table; for a season in progress the projection is live, anchored at the last completed round
-
 ## Model profiles
 
 The project supports two model profiles:
@@ -241,7 +241,7 @@ The project supports two model profiles:
 - `fast` — fixed hyperparameters, quick and deterministic
 - `optimized` — randomized tuning over a seeded search space before fitting each final model
 
-For the race and grid models, tuning minimizes pooled MAE across rolling validation folds. For the milestone pipeline, tuning minimizes pooled log loss. For the championship pipeline, tuning minimizes pooled MAE over leave-one-season-out folds (the fold key is the season year).
+For the race and grid models, tuning minimizes pooled MAE across rolling validation folds. For the championship pipeline, tuning minimizes pooled MAE over leave-one-season-out folds (the fold key is the season year). For the milestone pipeline, tuning minimizes pooled log loss.
 
 The fast profile is the default. The optimized profile is slower but often yields better backtest performance. When no candidate beats the fast defaults clearly, the model falls back to the fast hyperparameters.
 
@@ -264,13 +264,6 @@ Grid features include:
 - previous qualifying performance
 - driver/team form and points
 
-Milestone features vary by target:
-
-- pole model: day-before-qualifying style information set
-- race winner / podium / first retirement / fastest lap: pre-race data plus reliability and milestone history
-- sprint-pole and sprint-win models: sprint-weekend chronology and sprint prior performance
-- championship model: title standings state (corrected points, position, gap to the leader, rounds remaining) plus driver form, reliability and practice pace
-
 Championship pipeline features (drivers; a reduced set without the driver-specific columns applies to constructors):
 
 - points so far, scoring rate (season and last-3-rounds) and the run-rate projection itself
@@ -278,6 +271,13 @@ Championship pipeline features (drivers; a reduced set without the driver-specif
 - finish and quali-gap form, best finish, wins, podiums, retirement record
 - team points, team pace and team reliability (on driver rows)
 - stable driver and team identity codes, learned from past seasons
+
+Milestone features vary by target:
+
+- pole model: day-before-qualifying style information set
+- race winner / podium / first retirement / fastest lap: pre-race data plus reliability and milestone history
+- sprint-pole and sprint-win models: sprint-weekend chronology and sprint prior performance
+- championship model: title standings state (corrected points, position, gap to the leader, rounds remaining) plus driver form, reliability and practice pace
 
 The project is careful about unsupported/NaN feature columns: if a training split has a column with all NaN values, the training logic drops it rather than crashing, which is critical for early-round training and for pre-session predictions.
 
@@ -290,8 +290,8 @@ Pages:
 - Home
 - Race prediction
 - Qualifying prediction
-- Milestones & extras
 - Championship prediction
+- Milestones & extras
 
 App details:
 
@@ -338,8 +338,8 @@ A lightweight import smoke test for the CLI entry points is:
 ```bash
 python pipelines/predict_race.py --help
 python pipelines/predict_grid.py --help
-python pipelines/predict_extras.py --help
 python pipelines/predict_championship.py --help
+python pipelines/predict_extras.py --help
 ```
 
 A representative AppTest loop for page rendering and button execution (the permanent, round-pinned version lives in `tests/test_webapp_apptest.py`):
@@ -352,8 +352,8 @@ for page, run_key in (
     ("webapp/page_home.py", None),
     ("webapp/page_race.py", "race_run"),
     ("webapp/page_quali.py", "grid_run"),
-    ("webapp/page_extras.py", "extras_run"),
     ("webapp/page_championship.py", "championship_run"),
+    ("webapp/page_extras.py", "extras_run"),
 ):
     at = AppTest.from_file(page, default_timeout=900)
     at.run()

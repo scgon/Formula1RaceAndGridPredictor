@@ -1,9 +1,9 @@
 """Streamlit glue for the F1 prediction web app.
 
 No pipeline logic lives here — this module only wires the four pipelines
-(predict_race / predict_grid / predict_extras / predict_championship, all
-built on f1_common) into Streamlit via run_pipeline / run_extras_pipeline /
-run_championship_pipeline.
+(predict_race / predict_grid / predict_championship / predict_extras, all
+built on f1_common) into Streamlit via run_pipeline / run_championship_pipeline /
+run_extras_pipeline.
 
 Execution is button-gated: changing a widget never starts the pipeline.
 Pressing **Run prediction** executes the whole pipeline once and stores a
