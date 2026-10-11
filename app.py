@@ -17,6 +17,8 @@ home = st.Page("webapp/page_home.py", title="Home", icon=":material/home:", defa
 race = st.Page("webapp/page_race.py", title="Race prediction", icon=":material/sports_score:")
 quali = st.Page("webapp/page_quali.py", title="Qualifying prediction", icon=":material/timer:")
 extras = st.Page("webapp/page_extras.py", title="Milestones & extras", icon=":material/emoji_events:")
+championship = st.Page("webapp/page_championship.py", title="Championship prediction",
+                       icon=":material/leaderboard:")
 
-pg = st.navigation({"": [home], "Predictions": [race, quali, extras]})
+pg = st.navigation({"": [home], "Predictions": [race, quali, extras, championship]})
 pg.run()

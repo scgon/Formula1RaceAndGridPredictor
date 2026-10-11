@@ -37,12 +37,13 @@ from pathlib import Path
 _STAMP_ATTR = "_src_stamp"
 
 # The app's whole import chain, in dependency order: f1_common first (the
-# pipelines import it), then the three pipelines, webapp_common last (it
-# imports all three pipelines itself). webapp_common pulls in every module
-# anyway, so all pages verify the same complete chain — whichever page runs
-# first after a code pull heals the process for all of them.
+# pipelines import it), then the four pipelines (predict_championship imports
+# predict_race), webapp_common last (it imports all four pipelines itself).
+# webapp_common pulls in every module anyway, so all pages verify the same
+# complete chain — whichever page runs first after a code pull heals the
+# process for all of them.
 MODULES = ("f1_common", "predict_race", "predict_grid", "predict_extras",
-           "webapp_common")
+           "predict_championship", "webapp_common")
 
 
 def _stamp(module):

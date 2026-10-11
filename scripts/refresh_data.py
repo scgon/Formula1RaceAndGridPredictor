@@ -1,7 +1,7 @@
 """Refresh the bundled season CSVs (data/*.csv) and team colors
 (data/team_colors.csv).
 
-The web app and both CLI pipelines reuse these files, so a fresh container
+The web app and all CLI pipelines reuse these files, so a fresh container
 never re-downloads whole seasons (fastf1 hard-stops at 500 uncached API
 calls/hour, which a cold full-season download would exceed). The scheduled
 GitHub workflow (.github/workflows/refresh-data.yml) runs this script to
@@ -13,7 +13,8 @@ generation of past seasons, e.g.:
 Explicit --years refresh the race and grid CSVs only, unless the year
 already has an extras CSV (keeping it current); collecting extras for a
 brand-new season happens through the default run (previous + current
-season) or by running the extras pipeline directly once.
+season) or by running the extras pipeline directly once. The championship
+pipeline needs no collection of its own — it reads the race CSVs.
 
 Per season the race pipeline is collected before the grid pipeline (so the
 grid pipeline's session loads are served from the fastf1 cache the race

@@ -1,6 +1,6 @@
 """Extras prediction page: one selected milestone model (pole, race winner,
-race podium, first retirement, fastest lap, sprint pole or sprint winner),
-presented like the race/quali pages."""
+race podium, first retirement, fastest lap, sprint pole, sprint winner or
+championship winner), presented like the race/quali pages."""
 
 import sys
 from pathlib import Path
@@ -29,7 +29,7 @@ NOTICE_KEY = f"{KIND}_reload_notice"
 MILESTONE_OPTIONS = {spec["label"]: name for name, spec in predict_extras.TARGETS.items()}
 
 st.title("Milestones & Extras: one model, one pick")
-st.caption("Seven small models, each predicting a single weekend milestone instead of a "
+st.caption("Eight small models, each predicting a single weekend milestone instead of a "
            "full order — pick one in the sidebar and only it runs. **Pole position** uses "
            "day-before-quali information only (FP1/FP2, sprint qualifying, past quali "
            "form), so it can predict before qualifying runs. **Race winner**, "
@@ -38,7 +38,10 @@ st.caption("Seven small models, each predicting a single weekend milestone inste
            "(grid, FP1–FP3, sprint results, form and reliability history). "
            "**Sprint pole** and **Sprint winner** predict the sprint weekend's "
            "qualifying and race from Friday practice and past sprint / quali form — "
-           "they exist on sprint weekends only. Each model scores every driver with a "
+           "they exist on sprint weekends only. **Championship winner** scores every "
+           "driver's chance of winning the season title from the standings, form and "
+           "practice pace — it trains on every bundled past season, so it also predicts "
+           "before qualifying runs. Each model scores every driver with a "
            "probability; the top pick is the prediction, always compared against a "
            "naive baseline.")
 
@@ -51,7 +54,7 @@ with st.sidebar:
     year, force_refresh, reload_pressed = wc.season_inputs(KIND)
     milestone_label = st.selectbox(
         "Milestone", list(MILESTONE_OPTIONS), key=f"{KIND}_milestone",
-        help="Which of the seven milestone models to run — only this one is "
+        help="Which of the eight milestone models to run — only this one is "
              "trained and backtested.")
     milestone = MILESTONE_OPTIONS[milestone_label]
     spec = predict_extras.TARGETS[milestone]
@@ -120,21 +123,34 @@ driver_team = wc.team_by_driver(features)  # driver -> team, latest row wins
 headline = f"{used_year} {event_name} — round {target}"
 if mode == "prequali":
     st.subheader(f":material/rocket_launch: Prediction: {headline} — {spec['label']}")
-    st.caption("Pre-quali mode. Qualifying has not happened yet, so the pole model "
-               "predicts from practice, sprint qualifying and season form — its call "
-               "is scored once the round completes.")
+    if result["milestone"] == "champion":
+        st.caption("Pre-quali mode. Qualifying has not happened yet, but the title "
+                   "standings, form and practice pace are enough for this model — its "
+                   "call is scored once the season is complete.")
+    else:
+        st.caption("Pre-quali mode. Qualifying has not happened yet, so the pole model "
+                   "predicts from practice, sprint qualifying and season form — its call "
+                   "is scored once the round completes.")
 elif mode == "pre":
     st.subheader(f":material/rocket_launch: Prediction: {headline} — {spec['label']}")
     if spec.get("pre_scored"):
         st.caption(f"Pre-race mode. The {spec['label'].lower()} happens before the race, "
                    "so the model's call is already scored below.")
+    elif result["milestone"] == "champion":
+        st.caption("Pre-race mode. The grid is known from qualifying; the championship "
+                   "stays unknown until the season is complete.")
     else:
         st.caption("Pre-race mode. The grid is known from qualifying; this race "
                    "milestone stays unknown until the race runs.")
 else:
     st.subheader(f":material/history: Review: {headline} — {spec['label']}")
-    st.caption("This round is already completed — the model was trained only on earlier "
-               "rounds, so this is a genuine out-of-sample review.")
+    if result["milestone"] == "champion":
+        st.caption("This round is already completed. The champion model trains on "
+                   "completed seasons *before* this one, so this is a genuine "
+                   "out-of-sample review.")
+    else:
+        st.caption("This round is already completed — the model was trained only on earlier "
+                   "rounds, so this is a genuine out-of-sample review.")
 
 if result["resolve_log"].strip():
     st.caption(result["resolve_log"].strip())
@@ -190,7 +206,7 @@ else:
         icon = ":material/check_circle:" if verdict == "hit" else ":material/cancel:"
         st.info(f"**Actual: {wc.drivers_md(pred['actual'], driver_team, colors, sep=' / ')}** "
                 f"— the model's call was a **{verdict}** {icon}")
-    elif mode == "post" or result["milestone"] == "pole":
+    elif mode == "post" or result["milestone"] in ("pole", "champion"):
         st.caption("Actual: not known yet.")
 
     st.markdown("**Top 10 driver probabilities**")
@@ -201,8 +217,14 @@ else:
 # --- rolling backtest ------------------------------------------------------
 st.divider()
 st.subheader("Rolling backtest")
-st.caption("Each round predicted using only the rounds before it — the selected model's "
-            "top pick against its naive baseline.")
+if result["milestone"] == "champion":
+    st.caption("Each round of the season predicted from the standings at that point — "
+               "the model always trains on completed *earlier seasons* (never this "
+               "season's own rounds, whose champion is only known once it ends), so "
+               "the pick evolves only as the standings do.")
+else:
+    st.caption("Each round predicted using only the rounds before it — the selected model's "
+               "top pick against its naive baseline.")
 
 if not records:
     st.info("Not enough completed rounds for a backtest yet.")

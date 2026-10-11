@@ -10,9 +10,12 @@ offline-only fast subset).
 """
 
 from pathlib import Path
+from datetime import datetime
 
 import pytest
 from streamlit.testing.v1 import AppTest
+
+import webapp_common as wc
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PAGES = REPO_ROOT / "webapp"
@@ -73,3 +76,52 @@ def test_extras_page_full_run_on_a_completed_round():
     assert not at.exception and not at.error
     assert any("Review" in s.value for s in at.subheader)
     assert at.dataframe  # the probability table rendered
+
+
+@pytest.mark.slow
+def test_extras_champion_page_full_run_on_a_completed_season():
+    # a past-calendar extras season: its championship is decided, so the
+    # champion model's backtest is scored end to end (a current-year run
+    # would render too, but every hit would be an unscored "?")
+    complete = [y for y in wc.bundled_years("extras") if y < datetime.now().year]
+    if not complete:
+        pytest.skip("no completed extras season is bundled")
+    season = max(complete)
+    at = AppTest.from_file(str(PAGES / "page_extras.py"), default_timeout=900)
+    at.run()
+    assert not at.exception
+    at.sidebar.selectbox(key="extras_season").set_value(season)
+    at.sidebar.selectbox(key="extras_milestone").set_value("Championship winner")
+    at.run()  # re-render the target selectbox with the chosen season's rounds
+    at.sidebar.selectbox(key="extras_target").set_value(
+        _completed_target_label(at, "extras_target"))
+    at.sidebar.button(key="extras_run").click()
+    at.run()
+    assert not at.exception and not at.error
+    assert any("Review" in s.value for s in at.subheader)
+    assert at.dataframe  # the probability table rendered
+    assert any("the model's call was a" in i.value for i in at.info)  # scored
+
+
+@pytest.mark.slow
+def test_championship_page_full_run_on_a_completed_season():
+    # a completed season: the forecast resolves to post mode (the final
+    # standings are known), so the render is fully scored and deterministic
+    # apart from the schedule fetch; the backtest (leave-one-season-out over
+    # every complete bundled season) is the multi-minute part of the run
+    complete = [y for y in wc.bundled_years("championship") if y < datetime.now().year]
+    if not complete:
+        pytest.skip("no completed championship season is bundled")
+    season = max(complete)
+    at = AppTest.from_file(str(PAGES / "page_championship.py"), default_timeout=900)
+    at.run()
+    assert not at.exception
+    at.sidebar.selectbox(key="championship_season").set_value(season)
+    at.sidebar.selectbox(key="championship_championship").set_value(
+        "Drivers' championship")
+    at.run()  # re-render the snapshot selectbox with the chosen season's rounds
+    at.sidebar.button(key="championship_run").click()
+    at.run()
+    assert not at.exception and not at.error
+    assert any("Review" in s.value for s in at.subheader)
+    assert at.dataframe  # the projected standings table rendered
