@@ -125,6 +125,17 @@ def test_championship_page_full_run_on_a_completed_season():
     assert not at.exception and not at.error
     assert any("Review" in s.value for s in at.subheader)
     assert at.dataframe  # the projected standings table rendered
+    standings = at.dataframe[0].value
+    for col in ("Final points — remaining", "Pts/round — remaining",
+                "Final points — direct", "Pts/round — direct",
+                "Baseline points", "Avg pts/round"):
+        assert col in standings.columns
+    # the auto snapshot of a complete season is its final round — nothing is
+    # left to forecast, so the implied-pace columns come out blank while the
+    # season average (the rate the run-rate baseline extrapolates) never is
+    assert standings["Pts/round — remaining"].isna().all()
+    assert standings["Pts/round — direct"].isna().all()
+    assert standings["Avg pts/round"].notna().all()
 
 
 @pytest.mark.slow
