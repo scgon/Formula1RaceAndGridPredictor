@@ -1,17 +1,19 @@
 """Offline unit tests for pipelines/f1_common.py — verbosity gating,
-UTC/schedule helpers, quali-lap extraction, the model factory, the
-hyperparameter tuner, permutation importance and the season CSV cache.
+UTC/schedule helpers, quali-lap extraction, the model factories (regressor
+and classifier), the hyperparameter tuners, the fitted-model cache
+(train_or_load), permutation importance and the season CSV cache.
 Nothing here touches the network: collect_season runs against synthetic
 schedules and stub loaders with DATA_DIR pointed at a tmp_path."""
 
 import argparse
 from datetime import timedelta
 
+import joblib
 import numpy as np
 import pandas as pd
 import pytest
 from fastf1.exceptions import RateLimitExceededError
-from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 
 import f1_common
 
@@ -198,6 +200,146 @@ def test_importance_scores_dataframe():
     # ordered descending, with the informative feature on top
     assert frame["importance"].iloc[0] == frame["importance"].max()
     assert frame["feature"].iloc[0] == "alpha"
+
+
+# --- fitted-model cache ---------------------------------------------------------
+
+def test_model_cache_flags_map_to_enabled_state(monkeypatch):
+    monkeypatch.setattr(f1_common, "MODEL_CACHE", False)
+
+    def state(argv):
+        parser = argparse.ArgumentParser()
+        f1_common.add_model_cache_args(parser)
+        f1_common.apply_model_cache(parser.parse_args(argv))
+        return f1_common.MODEL_CACHE
+
+    assert state([]) is True  # reusing fitted models is the default
+    assert state(["--no-model-cache"]) is False
+
+
+def test_train_or_load_fits_and_caches_under_fast_profile(monkeypatch, tmp_path):
+    monkeypatch.setattr(f1_common, "MODEL_CACHE_DIR", tmp_path / "models")
+    X, y, rounds = _synthetic_training_set()
+    model, tuned = f1_common.train_or_load("race:gain", X, y, rounds)
+    assert isinstance(model, HistGradientBoostingRegressor)
+    assert tuned is None  # fast profile: fixed hyperparameters
+    assert model.n_iter_ > 0  # fitted
+    assert len(list((tmp_path / "models").glob("*.joblib"))) == 1
+
+
+def test_train_or_load_reuses_the_cached_model_without_refitting(monkeypatch, tmp_path):
+    monkeypatch.setattr(f1_common, "MODEL_CACHE_DIR", tmp_path / "models")
+    X, y, rounds = _synthetic_training_set()
+    fits = []
+    original = HistGradientBoostingRegressor.fit
+
+    def _counting_fit(self, X, y):
+        fits.append(1)
+        return original(self, X, y)
+
+    monkeypatch.setattr(HistGradientBoostingRegressor, "fit", _counting_fit)
+    first, _ = f1_common.train_or_load("race:gain", X, y, rounds)
+    assert len(fits) == 1
+    second, _ = f1_common.train_or_load("race:gain", X, y, rounds)
+    assert len(fits) == 1  # identical re-run: served from the cache
+    assert np.allclose(first.predict(X), second.predict(X))
+
+
+def test_train_or_load_with_cache_disabled_retrains(monkeypatch, tmp_path):
+    monkeypatch.setattr(f1_common, "MODEL_CACHE_DIR", tmp_path / "models")
+    monkeypatch.setattr(f1_common, "MODEL_CACHE", False)
+    X, y, rounds = _synthetic_training_set()
+    fits = []
+    original = HistGradientBoostingRegressor.fit
+
+    def _counting_fit(self, X, y):
+        fits.append(1)
+        return original(self, X, y)
+
+    monkeypatch.setattr(HistGradientBoostingRegressor, "fit", _counting_fit)
+    f1_common.train_or_load("race:gain", X, y, rounds)
+    f1_common.train_or_load("race:gain", X, y, rounds)
+    assert len(fits) == 2
+    assert not (tmp_path / "models").exists()  # nothing stored while disabled
+
+
+def test_train_or_load_cache_keys_separate_lanes_and_data(monkeypatch, tmp_path):
+    monkeypatch.setattr(f1_common, "MODEL_CACHE_DIR", tmp_path / "models")
+    X, y, rounds = _synthetic_training_set()
+    f1_common.train_or_load("race:gain", X, y, rounds)
+    f1_common.train_or_load("race:direct", X, y, rounds)  # different lane
+    f1_common.train_or_load("race:gain", X, y + 1.0, rounds)  # different data
+    assert len(list((tmp_path / "models").glob("*.joblib"))) == 3
+
+
+def test_train_or_load_classifier_reuses_the_cached_model(monkeypatch, tmp_path):
+    monkeypatch.setattr(f1_common, "MODEL_CACHE_DIR", tmp_path / "models")
+    X, _y, rounds = _synthetic_training_set()
+    labels = (X[:, 0] > np.median(X[:, 0])).astype(int)
+    fits = []
+    original = HistGradientBoostingClassifier.fit
+
+    def _counting_fit(self, X, y):
+        fits.append(1)
+        return original(self, X, y)
+
+    monkeypatch.setattr(HistGradientBoostingClassifier, "fit", _counting_fit)
+    first, tuned = f1_common.train_or_load("extras:pole", X, labels, rounds,
+                                          classifier=True)
+    assert isinstance(first, HistGradientBoostingClassifier)
+    assert tuned is None
+    assert list(first.classes_) == [0, 1]
+    second, _ = f1_common.train_or_load("extras:pole", X, labels, rounds,
+                                        classifier=True)
+    assert len(fits) == 1  # cache hit, no refit
+    assert np.allclose(first.predict_proba(X)[:, 1], second.predict_proba(X)[:, 1])
+
+
+def test_train_or_load_optimized_profile_skips_the_tuner_on_a_hit(monkeypatch, tmp_path):
+    monkeypatch.setattr(f1_common, "MODEL_CACHE_DIR", tmp_path / "models")
+    X, y, rounds = _synthetic_training_set()
+    calls = []
+    real_tuner = f1_common.tune_hyperparameters
+
+    def _spying_tuner(X, y, rounds, **kwargs):
+        calls.append(1)
+        return real_tuner(X, y, rounds, **kwargs)
+
+    monkeypatch.setattr(f1_common, "tune_hyperparameters", _spying_tuner)
+    first_model, first_tuned = f1_common.train_or_load(
+        "race:gain", X, y, rounds, profile="optimized")
+    assert len(calls) == 1
+    assert first_tuned is None or set(first_tuned) == set(f1_common.TUNED_SEARCH_SPACE)
+    second_model, second_tuned = f1_common.train_or_load(
+        "race:gain", X, y, rounds, profile="optimized")
+    assert len(calls) == 1  # the hyperparameter search is skipped on a hit
+    assert second_tuned == first_tuned
+    assert np.allclose(first_model.predict(X), second_model.predict(X))
+
+
+def test_train_or_load_survives_a_corrupt_cache_entry(monkeypatch, tmp_path):
+    monkeypatch.setattr(f1_common, "MODEL_CACHE_DIR", tmp_path / "models")
+    monkeypatch.setattr(f1_common, "_model_cache_key", lambda *args: "poisoned")
+    cache_dir = tmp_path / "models"
+    cache_dir.mkdir()
+    (cache_dir / "poisoned.joblib").write_bytes(b"not a joblib file")
+    X, y, rounds = _synthetic_training_set()
+    model, _tuned = f1_common.train_or_load("race:gain", X, y, rounds)
+    assert model.n_iter_ > 0  # corrupt entry: retrained, not crashed
+    # a loadable but wrongly-shaped entry is a miss too
+    joblib.dump("nonsense", cache_dir / "poisoned.joblib")
+    f1_common.train_or_load("race:gain", X, y, rounds)
+    entry = joblib.load(cache_dir / "poisoned.joblib")
+    assert set(entry) == {"model", "tuned"}  # replaced by the real entry
+
+
+def test_train_or_load_ignores_an_unwritable_cache_dir(monkeypatch, tmp_path):
+    blocker = tmp_path / "blocker"
+    blocker.write_text("a regular file")
+    monkeypatch.setattr(f1_common, "MODEL_CACHE_DIR", blocker / "models")
+    X, y, rounds = _synthetic_training_set()
+    model, _tuned = f1_common.train_or_load("race:gain", X, y, rounds)
+    assert model.n_iter_ > 0  # the cache must never fail a run
 
 
 # --- the season CSV cache ---------------------------------------------------------

@@ -273,11 +273,6 @@ def usable_features(frame):
     return [name for name, col in zip(FEATURES, matrix.T) if not np.isnan(col).all()]
 
 
-def make_model(feature_names, profile="fast", tuned_params=None):
-    categorical = [feature_names.index("team_id")] if "team_id" in feature_names else []
-    return common.make_model(categorical, profile, tuned_params)
-
-
 def train_model(features, target_round, mode="gain", profile="fast"):
     """Fit one model on all rounds before `target_round`.
 
@@ -285,6 +280,9 @@ def train_model(features, target_round, mode="gain", profile="fast"):
     With profile="optimized" the hyperparameters come from a CV-MAE search
     over the training set (None when nothing clearly beat the fast defaults,
     in which case the model falls back to the fast profile's fixed values).
+    Every fit goes through f1_common.train_or_load, which reuses an
+    identical previously fitted model (f1_common's fitted-model cache)
+    instead of retraining.
     """
     train = features[
         (features["round"] < target_round)
@@ -300,14 +298,9 @@ def train_model(features, target_round, mode="gain", profile="fast"):
     used = usable_features(train)
     X = train[used].to_numpy(dtype=float)
     categorical = [used.index("team_id")] if "team_id" in used else None
-    tuned = None
-    if profile == "optimized":
-        tuned = common.tune_hyperparameters(
-            X, target, train["round"].to_numpy(),
-            categorical_features=categorical,
-        )
-    model = make_model(used, profile, tuned)
-    model.fit(X, target)
+    model, tuned = common.train_or_load(
+        f"race:{mode}", X, target, train["round"].to_numpy(),
+        profile=profile, categorical_features=categorical)
     return model, train, used, tuned
 
 
@@ -726,8 +719,10 @@ def main():
     parser.add_argument("--refresh", action="store_true",
                         help="re-download season data, ignoring the local cache")
     common.add_verbosity_args(parser)
+    common.add_model_cache_args(parser)
     args = parser.parse_args()
     common.apply_verbosity(args)
+    common.apply_model_cache(args)
 
     setup()
     year = args.season or datetime.now().year

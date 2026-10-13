@@ -68,6 +68,10 @@ The project uses fastf1 historical data plus a local cache layer:
   the web app, so cold containers can render team-colored tables and charts
   without downloading a race session
 - `cache/` stores downloaded fastf1 session data for faster future runs
+- `cache/models/` stores fitted models keyed by a hash of their training
+  data + hyperparameters + sklearn version, so an identical re-run (same
+  settings, same data) reuses the previously fitted model instead of
+  retraining. Safe to delete at any time; `--no-model-cache` opts out
 - `scripts/refresh_data.py` regenerates or updates bundled CSVs when needed
 - The GitHub workflow in `.github/workflows/refresh-data.yml` refreshes the bundled data on a schedule and on code pushes
 - The web app re-fetches the small event schedule at most every 12 hours rather
@@ -167,6 +171,7 @@ Common flags:
 --models {both,remaining,direct} # championship pipeline
 --refresh
 --min-train-rounds N
+--no-model-cache
 -q, --quiet
 -v, --verbose
 ```
@@ -248,6 +253,8 @@ The fast profile is the default. The optimized profile is slower but often yield
 
 All models are built with `HistGradientBoostingRegressor` or `HistGradientBoostingClassifier`, and the project keeps the fit deterministic with a fixed `random_state` and stable data ordering.
 
+Every model is fit through `f1_common.train_or_load`, which reuses an identical previously fitted model from `cache/models/` instead of retraining — the optimized profile benefits most, since its per-fit hyperparameter search is skipped too. The models are seeded and deterministic, so a cache hit returns exactly the model a fresh fit would have produced; any change to the data, features or model constants changes the cache key and retrains. Pass `--no-model-cache` to retrain from scratch.
+
 ## Feature sets and project logic
 
 Race features include items such as:
@@ -325,7 +332,7 @@ python -m pytest tests -m "not slow"   # fast offline subset (~15s)
 
 It contains:
 
-- offline unit tests for the shared machinery and all three pipelines, run on synthetic frames (feature-engineering shifts, the all-NaN feature guard, target modes, milestone specs, end-to-end train/predict cycles)
+- offline unit tests for the shared machinery and all four pipelines, run on synthetic frames (feature-engineering shifts, the all-NaN feature guard, target modes, milestone specs, end-to-end train/predict cycles, the fitted-model cache — identical re-runs reuse the fitted model instead of retraining)
 - schema checks over the bundled `data/*.csv`, reusing the same required-column definitions as the data-refresh workflow, so a schema change fails here exactly when it would force a season regeneration
 - CLI `--help` import smoke tests for all three pipelines
 - Streamlit AppTest runs: the homepage renders, plus one full Run per prediction page pinned to the last completed round (marked `slow`; these fetch the small season schedule, so they need network)

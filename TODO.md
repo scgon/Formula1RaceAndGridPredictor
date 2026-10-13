@@ -36,8 +36,8 @@
 
 - [x] **Tests** — pytest covers the pure helpers in `f1_common`, all four pipelines (race, grid, championship, extras), bundled-data schemas, CLI `--help` smoke tests, and Streamlit AppTest page checks.
 - [x] **CI** — GitHub Actions runs the full pytest suite on pushes and pull requests for Python 3.12 and 3.14.
-- [ ] **Notebook sync** — generate the notebooks from the pipeline modules (or make them thin wrappers importing `pipelines/`) to end the manual cell-by-cell sync. The championship and extras pipelines have no inline notebooks at all.
-- [ ] **Persist fitted models** — joblib cache keyed on data + params hash so identical re-runs skip retraining (biggest win for the optimized profile).
+- [ ] **Notebook sync** — generate the notebooks from the pipeline modules (or make them thin wrappers importing `pipelines/`) to end the manual cell-by-cell sync. The extras pipeline has no inline notebook at all.
+- [x] **Persist fitted models** — done as `f1_common.train_or_load`: a content-addressed joblib cache in `cache/models/` (keyed on the training bytes + hyperparameter sources + sklearn version) so identical re-runs skip retraining; the optimized profile skips its tuner too. `--no-model-cache` opts out.
 - [ ] Parallelize the backtest across rounds (folds are independent) with joblib.
 - [ ] Lint/format setup (ruff) + pre-commit hooks.
 - [x] Type hints on `f1_common`'s public helpers — done: every function in `pipelines/f1_common.py` now carries full parameter and return annotations (CLI parity verified on a post-mode round).

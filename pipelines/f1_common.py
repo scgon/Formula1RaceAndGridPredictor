@@ -3,13 +3,17 @@
 predict_race.py, predict_grid.py and predict_extras.py remain independent
 entry points with their own features, targets and models; this module holds
 the machinery they share: fastf1 cache setup, UTC handling, qualifying-lap
-extraction, practice-lap features, the season CSV cache, the model factory,
-permutation importance and the CLI verbosity gating (-q/--quiet, -v/--verbose;
-the web app runs at the default level). The Streamlit app (app.py) builds on
-the same functions.
+extraction, practice-lap features, the season CSV cache, the model factories
+(regressor + classifier) and their hyperparameter tuners, the fitted-model
+cache (train_or_load — an identical re-run reuses the previously fitted model
+instead of retraining), permutation importance and the CLI verbosity gating
+(-q/--quiet, -v/--verbose; the web app runs at the default level). The
+Streamlit app (app.py) builds on the same functions.
 """
 
 import argparse
+import hashlib
+import os
 import re
 import warnings
 import time
@@ -18,12 +22,14 @@ from datetime import datetime, timedelta, timezone
 from itertools import product
 from pathlib import Path
 
+import joblib
 import numpy as np
 from numpy.typing import ArrayLike
 import pandas as pd
+import sklearn
 import fastf1
 from fastf1.exceptions import RateLimitExceededError
-from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 from sklearn.inspection import permutation_importance
 
 warnings.filterwarnings("ignore")
@@ -102,6 +108,11 @@ def apply_verbosity(args: argparse.Namespace) -> None:
 #:               minimizes cross-validated MAE over the training rounds;
 #:               slower to run, usually lower MAE.
 MODEL_PROFILES = ("fast", "optimized")
+
+#: Seed of every final model (the tuners seed their candidate models with
+#: TUNE_RANDOM_STATE instead). Part of the fitted-model cache key, so a
+#: change here invalidates every cached model.
+MODEL_RANDOM_STATE = 42
 
 FAST_PARAMS = {
     "loss": "absolute_error",
@@ -369,7 +380,36 @@ def make_model(categorical_features: Sequence[int], profile: str = "fast",
         params.update(tuned_params)
     return HistGradientBoostingRegressor(
         categorical_features=categorical_features,
-        random_state=42,
+        random_state=MODEL_RANDOM_STATE,
+        **params,
+    )
+
+
+# Classifiers need smaller leaves than the regressor defaults: the positive
+# class is one driver per round (~1/20 of the rows), so FAST_PARAMS'
+# min_samples_leaf=20 would starve the trees. Everything else mirrors
+# FAST_PARAMS (no loss key — the classifier picks its own).
+CLASSIFIER_FAST_PARAMS = {
+    "learning_rate": 0.08,
+    "max_iter": 150,
+    "max_leaf_nodes": 15,
+    "min_samples_leaf": 10,
+    "l2_regularization": 1.0,
+}
+
+
+def make_classifier(categorical_features, profile="fast", tuned_params=None):
+    """HistGradientBoostingClassifier twin of make_model for the milestone
+    pipeline's binary targets (pole, winner, ...), using
+    CLASSIFIER_FAST_PARAMS."""
+    if profile not in MODEL_PROFILES:
+        raise ValueError(f"unknown model profile: {profile!r}")
+    params = dict(CLASSIFIER_FAST_PARAMS)
+    if profile == "optimized" and tuned_params:
+        params.update(tuned_params)
+    return HistGradientBoostingClassifier(
+        categorical_features=categorical_features,
+        random_state=MODEL_RANDOM_STATE,
         **params,
     )
 
@@ -465,11 +505,241 @@ def tune_hyperparameters(X: ArrayLike, y: ArrayLike, rounds: ArrayLike,
     return best_params
 
 
+def tune_classifier(X, y, rounds, categorical_features=None,
+                    n_iter=TUNE_N_ITER, random_state=TUNE_RANDOM_STATE):
+    """Classifier twin of tune_hyperparameters: search TUNED_SEARCH_SPACE
+    for the combination with the lowest pooled cross-validated log loss on
+    one model's training set (same rolling folds, same seeded candidate
+    sampling, same minimum-improvement rule and fast-values fallback).
+    Folds whose training share contains a single class are skipped — a
+    classifier cannot be fit on them; when no fold is usable every
+    candidate ties at infinity and None (fast values) is returned.
+    """
+    X = np.asarray(X, dtype=float)
+    y = np.asarray(y, dtype=float)
+    rounds = np.asarray(rounds)
+    unique = np.unique(rounds)
+    if TUNE_MAX_SPLITS is None:
+        val_rounds = unique[1::TUNE_STRIDE]
+    else:
+        val_rounds = unique[-min(TUNE_MAX_SPLITS, len(unique) - 1):]
+    if len(val_rounds) == 0:
+        return None
+    fold_sets = []
+    for r in val_rounds:
+        X_train = X[rounds < r]
+        all_nan = np.isnan(X_train).all(axis=0)
+        if all_nan.any():
+            X_train = X_train.copy()
+            X_train[:, all_nan] = 0.0
+        fold_sets.append((X_train, y[rounds < r], X[rounds == r], y[rounds == r]))
+
+    keys = list(TUNED_SEARCH_SPACE)
+    combos = list(product(*(TUNED_SEARCH_SPACE[key] for key in keys)))
+    fast = tuple(CLASSIFIER_FAST_PARAMS[key] for key in keys)
+    rng = np.random.RandomState(random_state)
+    sampled = [combo for combo in
+               (combos[i] for i in rng.choice(len(combos), size=n_iter, replace=False))
+               if combo != fast][:n_iter]
+    candidates = [fast] + sampled
+
+    def pooled_log_loss(combo):
+        losses = []
+        for X_train, y_train, X_val, y_val in fold_sets:
+            if np.unique(y_train).size < 2:
+                continue
+            model = HistGradientBoostingClassifier(
+                categorical_features=categorical_features,
+                random_state=random_state,
+                **dict(zip(keys, combo)),
+            )
+            proba = model.fit(X_train, y_train).predict_proba(X_val)[:, 1]
+            proba = np.clip(proba, 1e-6, 1 - 1e-6)
+            losses.append(-(y_val * np.log(proba) + (1 - y_val) * np.log(1 - proba)))
+        if not losses:
+            return np.inf
+        return float(np.concatenate(losses).mean())
+
+    fast_loss = pooled_log_loss(fast)
+    best_params = None
+    best_loss = np.inf
+    for combo in candidates:
+        loss = fast_loss if combo == fast else pooled_log_loss(combo)
+        if loss < best_loss:
+            best_loss = loss
+            best_params = dict(zip(keys, combo))
+    keep_fast = best_loss > fast_loss * (1 - TUNE_MIN_IMPROVEMENT)
+    if VERBOSITY >= 2 and np.isfinite(fast_loss) and np.isfinite(best_loss):
+        if best_params is None or keep_fast:
+            vprint(2, f"  tuner: keeping fast hyperparameters (pooled log loss "
+                      f"{fast_loss:.3f}; best found {best_loss:.3f})")
+        else:
+            vprint(2, f"  tuner: adopting {format_params(best_params)} "
+                      f"(pooled log loss {best_loss:.3f} vs fast {fast_loss:.3f})")
+    if keep_fast:
+        return None
+    return best_params
+
+
 def format_params(params: Mapping[str, object] | None) -> str:
     """Compact one-line rendering of a hyperparameter dict for reports."""
     if not params:
         return ""
     return ", ".join(f"{key}={value}" for key, value in params.items())
+
+
+# --- fitted-model cache -------------------------------------------------------
+
+#: Where previously fitted models live (cache/models, beside the fastf1
+#: cache; gitignored, ephemeral on the hosted app). Content-addressed: the
+#: file name is the sha256 of everything that determines the fitted model
+#: (_model_cache_key), so the cache needs no invalidation logic — different
+#: data, features, hyperparameter sources or sklearn versions simply
+#: produce different keys. Safe to delete at any time; pruned by size
+#: (oldest entries first).
+MODEL_CACHE_DIR = CACHE_DIR / "models"
+
+#: Whether identical fits reuse the cached model (default) or retrain from
+#: scratch; toggled with the shared --no-model-cache CLI flag
+#: (add_model_cache_args / apply_model_cache). The web app keeps it on.
+MODEL_CACHE = True
+
+#: Once the cache holds more than this, the oldest entries are evicted
+#: (fits simply retrain on demand after an eviction).
+MODEL_CACHE_MAX_BYTES = 512 * 1024 * 1024
+
+
+def set_model_cache(enabled):
+    global MODEL_CACHE
+    MODEL_CACHE = bool(enabled)
+
+
+def add_model_cache_args(parser):
+    """The --no-model-cache flag shared by the pipeline CLIs; call
+    apply_model_cache(args) right after parse_args."""
+    parser.add_argument("--no-model-cache", dest="model_cache",
+                        action="store_false",
+                        help="retrain every model from scratch instead of reusing "
+                             "identical previously fitted models from cache/models")
+
+
+def apply_model_cache(args):
+    set_model_cache(getattr(args, "model_cache", True))
+
+
+def _model_cache_key(tag, X, target, rounds, profile, categorical, classifier):
+    """sha256 over everything that determines the fitted model: the exact
+    bytes of the arrays it is fit on, the tag naming the pipeline lane, the
+    profile, the estimator kind, the categorical column indices, the
+    hyperparameter sources and the sklearn version."""
+    h = hashlib.sha256()
+    h.update(f"sklearn={sklearn.__version__}".encode())
+    h.update(f"|tag={tag}|profile={profile}|classifier={classifier}".encode())
+    h.update(f"|random_state={MODEL_RANDOM_STATE}|categorical={categorical}".encode())
+    fast_params = CLASSIFIER_FAST_PARAMS if classifier else FAST_PARAMS
+    tune_config = (TUNE_N_ITER, TUNE_STRIDE, TUNE_MAX_SPLITS,
+                   TUNE_MIN_IMPROVEMENT, TUNE_RANDOM_STATE)
+    h.update(f"|params={sorted(fast_params.items())}".encode())
+    h.update(f"|search={sorted(TUNED_SEARCH_SPACE.items())}".encode())
+    h.update(f"|tune={tune_config}".encode())
+    for array in (X, target, rounds):
+        h.update(b"|")
+        h.update(np.ascontiguousarray(np.asarray(array)).tobytes())
+    return h.hexdigest()
+
+
+def _load_cached_model(key):
+    """The cache entry for `key`, or None when the cache is off, the entry
+    is missing or it cannot be loaded (corrupt file, pickle from an
+    incompatible environment) — a miss never fails a run, it just retrains."""
+    if not MODEL_CACHE:
+        return None
+    try:
+        entry = joblib.load(MODEL_CACHE_DIR / f"{key}.joblib")
+    except Exception:
+        return None
+    if isinstance(entry, dict) and "model" in entry and "tuned" in entry:
+        return entry
+    return None
+
+
+def _store_cached_model(key, entry):
+    """Persist one fitted-model entry; an unwritable cache directory is
+    ignored (this fit simply reruns next time) — the cache must never fail
+    a run. The write goes to a per-process temp file renamed into place, so
+    concurrent runs cannot observe a half-written model."""
+    if not MODEL_CACHE:
+        return
+    try:
+        MODEL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = MODEL_CACHE_DIR / f"{key}.tmp{os.getpid()}"
+        joblib.dump(entry, tmp)
+        os.replace(tmp, MODEL_CACHE_DIR / f"{key}.joblib")
+        _prune_model_cache()
+    except Exception:
+        vprint(2, "  model cache: entry could not be saved; this fit will rerun")
+
+
+def _prune_model_cache():
+    """Evict the oldest entries until the cache is back under
+    MODEL_CACHE_MAX_BYTES."""
+    try:
+        files = sorted(MODEL_CACHE_DIR.glob("*.joblib"),
+                       key=lambda path: path.stat().st_mtime)
+        total = sum(path.stat().st_size for path in files)
+        for path in files:
+            if total <= MODEL_CACHE_MAX_BYTES:
+                break
+            total -= path.stat().st_size
+            path.unlink()
+    except OSError:
+        pass
+
+
+def train_or_load(tag, X, target, rounds, *, profile="fast",
+                  categorical_features=None, classifier=False):
+    """Fit one model — or reuse the identical model fitted by a previous
+    run. The single choke point every pipeline fit goes through: the only
+    place models are tuned, created and fitted. Returns
+    (model, tuned hyperparameters).
+
+    The fitted-model cache stores the fitted model together with the tuned
+    hyperparameters, so an identical re-run skips the whole tune-and-fit
+    cycle and returns exactly the model a fresh fit would have produced
+    (the pipelines are seeded and deterministic); the optimized profile
+    benefits most, because its hyperparameter search is part of what gets
+    skipped. Any change to the data, the features, the profile or the model
+    constants produces a new key and retrains (see _model_cache_key).
+
+    tag        names the model for the cache and the -v log, e.g.
+               "race:gain", "grid:direct", "championship:drivers:remaining"
+               or "extras:pole" — belt-and-braces on top of the arrays, and
+               the label shown on a cache hit
+    X, target  the exact arrays handed to fit
+    rounds     the fold array handed to the tuner; part of the key even
+               under the fast profile
+    profile    "fast" or "optimized"
+    categorical_features  indices of the categorical columns in X
+    classifier selects the milestone pipeline's classifier twins of the
+               factory and tuner
+    """
+    if profile not in MODEL_PROFILES:
+        raise ValueError(f"unknown model profile: {profile!r}")
+    categorical = list(categorical_features) if categorical_features else []
+    key = _model_cache_key(tag, X, target, rounds, profile, categorical, classifier)
+    entry = _load_cached_model(key)
+    if entry is not None:
+        vprint(2, f"  model cache: reusing fitted {tag} model")
+        return entry["model"], entry["tuned"]
+    tuned = None
+    if profile == "optimized":
+        tuner = tune_classifier if classifier else tune_hyperparameters
+        tuned = tuner(X, target, rounds, categorical_features=categorical or None)
+    model = (make_classifier(categorical, profile, tuned) if classifier
+             else make_model(categorical, profile, tuned))
+    model.fit(X, target)
+    _store_cached_model(key, {"model": model, "tuned": tuned})
+    return model, tuned
 
 
 def rank_corr(a: ArrayLike, b: ArrayLike) -> float:
