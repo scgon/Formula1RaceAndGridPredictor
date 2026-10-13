@@ -39,7 +39,8 @@ The app and the CLI both use the same shared data-loading and training logic, so
 │   └── webapp_common.py           # app glue, logging, tables, charts, run wrappers
 ├── notebooks/
 │   ├── race_predictions.ipynb     # interactive race pipeline notebook
-│   └── grid_predictions.ipynb     # interactive qualifying pipeline notebook
+│   ├── grid_predictions.ipynb     # interactive qualifying pipeline notebook
+│   └── championship_predictions.ipynb  # interactive championship pipeline notebook
 ├── scripts/
 │   └── refresh_data.py            # refresh tracked season CSVs
 ├── tests/                         # pytest suite (unit, data schema, smoke, AppTest)
@@ -373,9 +374,10 @@ Notebook verification:
 ```bash
 python -m nbconvert --to notebook --execute --inplace notebooks/race_predictions.ipynb
 python -m nbconvert --to notebook --execute --inplace notebooks/grid_predictions.ipynb
+python -m nbconvert --to notebook --execute --inplace notebooks/championship_predictions.ipynb --ExecutePreprocessor.timeout=3600
 ```
 
-These notebook runs take longer because the backtests and charts execute end-to-end.
+These notebook runs take longer because the backtests and charts execute end-to-end; the championship notebook's leave-one-season-out backtest fits two models per complete-season round in one cell, so it needs the raised per-cell timeout.
 
 ## Refresh workflow and operational notes
 
