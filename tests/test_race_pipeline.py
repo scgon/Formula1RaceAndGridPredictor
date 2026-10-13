@@ -1,12 +1,15 @@
 """Offline unit tests for pipelines/predict_race.py: feature engineering
-(the one-round shift), the all-NaN feature guard, and an end-to-end
-train/predict cycle on synthetic data — including the pre-quali path where
-no grid exists and only the direct model can run."""
+(the one-round shift), the all-NaN feature guard, an end-to-end train/predict
+cycle on synthetic data — including the pre-quali path where no grid exists
+and only the direct model can run — and the fitted-model cache thread-through
+(a re-run of the same training data reuses the cached model)."""
 
 import numpy as np
 import pandas as pd
 import pytest
+from sklearn.ensemble import HistGradientBoostingRegressor
 
+import f1_common
 import predict_race
 
 
@@ -117,6 +120,26 @@ def test_train_and_predict_round_direct_mode():
                                            use_features=used)
     assert np.allclose(predicted["pred_finish"], predicted["model_output"])
     assert sorted(predicted["pred_pos"]) == list(range(1, 11))
+
+
+def test_train_model_reuses_an_identical_fitted_model(monkeypatch, tmp_path):
+    """train_model threads through f1_common's fitted-model cache: a second
+    identical call returns the cached model without refitting."""
+    monkeypatch.setattr(f1_common, "MODEL_CACHE_DIR", tmp_path / "models")
+    features = _features_frame(rounds=4)
+    model, _, used, _ = predict_race.train_model(features, 4, mode="gain")
+    train = features[(features["round"] < 4) & features["finish"].notna()
+                     & features["grid"].notna()]
+    X = train[used].to_numpy(dtype=float)
+
+    fits = []
+    original = HistGradientBoostingRegressor.fit
+    monkeypatch.setattr(HistGradientBoostingRegressor, "fit",
+                        lambda self, X, y: (fits.append(1), original(self, X, y))[1])
+    cached, _, cached_used, _ = predict_race.train_model(features, 4, mode="gain")
+    assert fits == []  # the whole fit came from the cache
+    assert cached_used == used
+    assert np.allclose(model.predict(X), cached.predict(X))
 
 
 def test_predict_round_prequali_scores_all_entrants():

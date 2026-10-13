@@ -445,6 +445,9 @@ def train_model(features, target_year, snapshot_round, mode="remaining",
     so far) — the race pipeline's gain-model analogue, anchored at the
     current standings; mode "direct" learns the absolute final points.
     Returns (model, train frame, used feature list, tuned hyperparameters).
+    Every fit goes through f1_common.train_or_load, which reuses an
+    identical previously fitted model (f1_common's fitted-model cache)
+    instead of retraining.
     """
     spec = CHAMPIONSHIPS[championship]
     train = features[
@@ -461,13 +464,12 @@ def train_model(features, target_year, snapshot_round, mode="remaining",
     used = usable_features(train, spec["features"])
     X = train[used].to_numpy(dtype=float)
     categorical = [used.index(c) for c in ("team_id", "driver_id") if c in used]
-    tuned = None
-    if profile == "optimized":
-        # leave-one-season-out folds: the tuner's round array is the season year
-        tuned = common.tune_hyperparameters(X, target, train["year"].to_numpy(),
-                                             categorical_features=categorical)
-    model = common.make_model(categorical, profile, tuned)
-    model.fit(X, target)
+    # leave-one-season-out folds: the tuner's (and cache key's) round array
+    # is the season year
+    model, tuned = common.train_or_load(
+        f"championship:{championship}:{mode}", X, target,
+        train["year"].to_numpy(),
+        profile=profile, categorical_features=categorical)
     return model, train, used, tuned
 
 
@@ -927,8 +929,10 @@ def main():
     parser.add_argument("--refresh", action="store_true",
                         help="re-download the target season's data, ignoring the local cache")
     common.add_verbosity_args(parser)
+    common.add_model_cache_args(parser)
     args = parser.parse_args()
     common.apply_verbosity(args)
+    common.apply_model_cache(args)
 
     setup()
     year = args.season or datetime.now().year

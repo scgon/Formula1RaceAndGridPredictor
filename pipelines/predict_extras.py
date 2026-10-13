@@ -46,20 +46,19 @@ hindsight leakage; an in-progress season's snapshots carry no label at
 all). The standings exist before qualifying, so this model also runs in
 prequali mode; its naive baseline is the current points leader.
 
-These are classifiers, not regressors, so the model factory, the
-hyperparameter tuner (pooled cross-validated log loss instead of MAE) and
-the permutation-importance helpers are local; everything else comes from
-f1_common.py.
+These are classifiers, not regressors, so the pipelines use the classifier
+twins of the shared f1_common machinery (make_classifier / tune_classifier,
+pooled cross-validated log loss instead of MAE); only the
+permutation-importance helpers stay local to this module, because they
+score predict_proba instead of predict.
 """
 
 import argparse
 from datetime import datetime, timedelta
-from itertools import product
 
 import numpy as np
 import pandas as pd
 import fastf1
-from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.inspection import permutation_importance
 
 import f1_common as common
@@ -95,17 +94,9 @@ RAW_COLUMNS = [
     "fastest_lap",
 ] + FP12_COLS + FP_COLS + SPRINT_QUALI_COLS + SPRINT_RACE_COLS
 
-# Classifiers need smaller leaves than the regressor defaults: the positive
-# class is one driver per round (~1/20 of the rows), so FAST_PARAMS'
-# min_samples_leaf=20 would starve the trees. Everything else mirrors
-# f1_common.FAST_PARAMS.
-CLASSIFIER_FAST_PARAMS = {
-    "learning_rate": 0.08,
-    "max_iter": 150,
-    "max_leaf_nodes": 15,
-    "min_samples_leaf": 10,
-    "l2_regularization": 1.0,
-}
+# Classifier hyperparameters live in f1_common now (the make_classifier twin
+# of its model factory); the alias keeps the old module surface.
+CLASSIFIER_FAST_PARAMS = common.CLASSIFIER_FAST_PARAMS
 
 POLE_FEATURES = [
     "fp12_best_delta",
@@ -868,94 +859,16 @@ def usable_features(frame, feature_names):
 
 
 def make_classifier(feature_names, profile="fast", tuned_params=None):
-    if profile not in common.MODEL_PROFILES:
-        raise ValueError(f"unknown model profile: {profile!r}")
-    params = dict(CLASSIFIER_FAST_PARAMS)
-    if profile == "optimized" and tuned_params:
-        params.update(tuned_params)
+    """Thin wrapper over the shared f1_common.make_classifier: it takes the
+    feature-name list the milestone specs carry and resolves the team_id
+    categorical index from it."""
     categorical = [feature_names.index("team_id")] if "team_id" in feature_names else []
-    return HistGradientBoostingClassifier(
-        categorical_features=categorical,
-        random_state=42,
-        **params,
-    )
+    return common.make_classifier(categorical, profile, tuned_params)
 
 
-def tune_classifier(X, y, rounds, categorical_features=None,
-                    n_iter=common.TUNE_N_ITER, random_state=common.TUNE_RANDOM_STATE):
-    """Classifier twin of f1_common.tune_hyperparameters: search
-    common.TUNED_SEARCH_SPACE for the combination with the lowest pooled
-    cross-validated log loss on one model's training set (same rolling
-    folds, same seeded candidate sampling, same minimum-improvement rule
-    and fast-values fallback). Folds whose training share contains a
-    single class are skipped — a classifier cannot be fit on them; when no
-    fold is usable every candidate ties at infinity and None (fast values)
-    is returned.
-    """
-    X = np.asarray(X, dtype=float)
-    y = np.asarray(y, dtype=float)
-    rounds = np.asarray(rounds)
-    unique = np.unique(rounds)
-    if common.TUNE_MAX_SPLITS is None:
-        val_rounds = unique[1::common.TUNE_STRIDE]
-    else:
-        val_rounds = unique[-min(common.TUNE_MAX_SPLITS, len(unique) - 1):]
-    if len(val_rounds) == 0:
-        return None
-    fold_sets = []
-    for r in val_rounds:
-        X_train = X[rounds < r]
-        all_nan = np.isnan(X_train).all(axis=0)
-        if all_nan.any():
-            X_train = X_train.copy()
-            X_train[:, all_nan] = 0.0
-        fold_sets.append((X_train, y[rounds < r], X[rounds == r], y[rounds == r]))
-
-    keys = list(common.TUNED_SEARCH_SPACE)
-    combos = list(product(*(common.TUNED_SEARCH_SPACE[key] for key in keys)))
-    fast = tuple(CLASSIFIER_FAST_PARAMS[key] for key in keys)
-    rng = np.random.RandomState(random_state)
-    sampled = [combo for combo in
-               (combos[i] for i in rng.choice(len(combos), size=n_iter, replace=False))
-               if combo != fast][:n_iter]
-    candidates = [fast] + sampled
-
-    def pooled_log_loss(combo):
-        losses = []
-        for X_train, y_train, X_val, y_val in fold_sets:
-            if np.unique(y_train).size < 2:
-                continue
-            model = HistGradientBoostingClassifier(
-                categorical_features=categorical_features,
-                random_state=random_state,
-                **dict(zip(keys, combo)),
-            )
-            proba = model.fit(X_train, y_train).predict_proba(X_val)[:, 1]
-            proba = np.clip(proba, 1e-6, 1 - 1e-6)
-            losses.append(-(y_val * np.log(proba) + (1 - y_val) * np.log(1 - proba)))
-        if not losses:
-            return np.inf
-        return float(np.concatenate(losses).mean())
-
-    fast_loss = pooled_log_loss(fast)
-    best_params = None
-    best_loss = np.inf
-    for combo in candidates:
-        loss = fast_loss if combo == fast else pooled_log_loss(combo)
-        if loss < best_loss:
-            best_loss = loss
-            best_params = dict(zip(keys, combo))
-    keep_fast = best_loss > fast_loss * (1 - common.TUNE_MIN_IMPROVEMENT)
-    if common.VERBOSITY >= 2 and np.isfinite(fast_loss) and np.isfinite(best_loss):
-        if best_params is None or keep_fast:
-            common.vprint(2, f"  tuner: keeping fast hyperparameters (pooled log loss "
-                          f"{fast_loss:.3f}; best found {best_loss:.3f})")
-        else:
-            common.vprint(2, f"  tuner: adopting {common.format_params(best_params)} "
-                          f"(pooled log loss {best_loss:.3f} vs fast {fast_loss:.3f})")
-    if keep_fast:
-        return None
-    return best_params
+# The classifier tuner moved to f1_common (the twin of tune_hyperparameters);
+# the alias keeps the old module surface.
+tune_classifier = common.tune_classifier
 
 
 def target_rows(features, round_number, name):
@@ -1006,7 +919,10 @@ def train_model(features, target_round, name, profile="fast", history=None):
 
     Returns (model, train frame, used feature list, tuned hyperparameters);
     raises ValueError when there is no training data or no positive
-    examples (a classifier cannot be fit on a single class).
+    examples (a classifier cannot be fit on a single class). Every fit
+    goes through f1_common.train_or_load, which reuses an identical
+    previously fitted model (f1_common's fitted-model cache) instead of
+    retraining.
     """
     spec = TARGETS[name]
     if spec.get("season_history"):
@@ -1028,12 +944,9 @@ def train_model(features, target_round, name, profile="fast", history=None):
     used = usable_features(train, spec["features"])
     X = train[used].to_numpy(dtype=float)
     categorical = [used.index("team_id")] if "team_id" in used else None
-    tuned = None
-    if profile == "optimized":
-        tuned = tune_classifier(X, target, train["round"].to_numpy(),
-                                categorical_features=categorical)
-    model = make_classifier(used, profile, tuned)
-    model.fit(X, target)
+    model, tuned = common.train_or_load(
+        f"extras:{name}", X, target, train["round"].to_numpy(),
+        profile=profile, categorical_features=categorical, classifier=True)
     return model, train, used, tuned
 
 
@@ -1465,8 +1378,10 @@ def main():
     parser.add_argument("--refresh", action="store_true",
                         help="re-download season data, ignoring the local cache")
     common.add_verbosity_args(parser)
+    common.add_model_cache_args(parser)
     args = parser.parse_args()
     common.apply_verbosity(args)
+    common.apply_model_cache(args)
 
     setup()
     year = args.season or datetime.now().year

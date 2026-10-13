@@ -30,7 +30,7 @@
 - [x] **Tests** — pytest covers the pure helpers in `f1_common`, the three pipelines, bundled-data schemas, CLI `--help` smoke tests, and Streamlit AppTest page checks.
 - [x] **CI** — GitHub Actions runs the full pytest suite on pushes and pull requests for Python 3.12 and 3.14.
 - [ ] **Notebook sync** — generate the notebooks from the pipeline modules (or make them thin wrappers importing `pipelines/`) to end the manual cell-by-cell sync.
-- [ ] **Persist fitted models** — joblib cache keyed on data + params hash so identical re-runs skip retraining (biggest win for the optimized profile).
+- [x] **Persist fitted models** — done as `f1_common.train_or_load`: a content-addressed joblib cache in `cache/models/` (keyed on the training bytes + hyperparameter sources + sklearn version) so identical re-runs skip retraining; the optimized profile skips its tuner too. `--no-model-cache` opts out.
 - [ ] Parallelize the backtest across rounds (folds are independent) with joblib.
 - [ ] Lint/format setup (ruff) + pre-commit hooks.
 - [ ] Type hints on `f1_common`'s public helpers.
