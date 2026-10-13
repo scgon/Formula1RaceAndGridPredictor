@@ -9,14 +9,17 @@ the web app runs at the default level). The Streamlit app (app.py) builds on
 the same functions.
 """
 
+import argparse
 import re
 import warnings
 import time
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from datetime import datetime, timedelta, timezone
 from itertools import product
 from pathlib import Path
 
 import numpy as np
+from numpy.typing import ArrayLike
 import pandas as pd
 import fastf1
 from fastf1.exceptions import RateLimitExceededError
@@ -63,18 +66,18 @@ RATE_LIMIT_MAX_WAITS = 8
 VERBOSITY = 1
 
 
-def set_verbosity(level):
+def set_verbosity(level: int) -> None:
     global VERBOSITY
     VERBOSITY = int(level)
 
 
-def vprint(level, *args, **kwargs):
+def vprint(level: int, *args: object, **kwargs: object) -> None:
     """print() gated on the current VERBOSITY (prints when VERBOSITY >= level)."""
     if VERBOSITY >= level:
         print(*args, **kwargs)
 
 
-def add_verbosity_args(parser):
+def add_verbosity_args(parser: argparse.ArgumentParser) -> None:
     """The -v/--verbose and -q/--quiet flags shared by the pipeline CLIs;
     call apply_verbosity(args) right after parse_args."""
     group = parser.add_mutually_exclusive_group()
@@ -87,7 +90,7 @@ def add_verbosity_args(parser):
                             "hyperparameter-tuner decisions and importance spread")
 
 
-def apply_verbosity(args):
+def apply_verbosity(args: argparse.Namespace) -> None:
     set_verbosity(2 if getattr(args, "verbose", False)
                   else 0 if getattr(args, "quiet", False) else 1)
 
@@ -125,7 +128,7 @@ TUNE_STRIDE = 2
 TUNE_RANDOM_STATE = 42
 
 
-def setup():
+def setup() -> None:
     CACHE_DIR.mkdir(exist_ok=True)
     DATA_DIR.mkdir(exist_ok=True)
     fastf1.Cache.enable_cache(str(CACHE_DIR))
@@ -135,11 +138,11 @@ def setup():
         pass
 
 
-def utc_now():
+def utc_now() -> pd.Timestamp:
     return pd.Timestamp(datetime.now(timezone.utc)).replace(tzinfo=None)
 
 
-def session_utc(row, name):
+def session_utc(row: pd.Series, name: str) -> pd.Timestamp | None:
     for i in range(1, 6):
         if row.get(f"Session{i}") == name:
             value = row.get(f"Session{i}DateUtc")
@@ -149,7 +152,7 @@ def session_utc(row, name):
     return None
 
 
-def completed_rounds(schedule):
+def completed_rounds(schedule: pd.DataFrame) -> list[tuple[int, str]]:
     """(round_number, event_name) pairs whose race started >COMPLETION_BUFFER ago."""
     now = utc_now()
     rounds = []
@@ -160,7 +163,7 @@ def completed_rounds(schedule):
     return rounds
 
 
-def season_team_colors(year, schedule=None):
+def season_team_colors(year: int, schedule: pd.DataFrame | None = None) -> dict[str, str]:
     """{team name -> hex color} for one season, taken straight from the
     latest completed round's race results (the same source the notebooks
     use). Needs fastf1 session data: with a cold cache this downloads a
@@ -190,7 +193,7 @@ def season_team_colors(year, schedule=None):
     return {}
 
 
-def best_quali_seconds(qres, num):
+def best_quali_seconds(qres: pd.DataFrame, num: str) -> float:
     if num not in qres.index:
         return np.nan
     times = []
@@ -202,13 +205,13 @@ def best_quali_seconds(qres, num):
     return min(times) if times else np.nan
 
 
-def pole_seconds(qres):
+def pole_seconds(qres: pd.DataFrame) -> float:
     times = [best_quali_seconds(qres, num) for num in qres.index]
     times = [t for t in times if not np.isnan(t)]
     return min(times) if times else np.nan
 
 
-def clean_practice_laps(session):
+def clean_practice_laps(session: fastf1.core.Session) -> pd.DataFrame:
     laps = session.laps
     if laps is None or laps.empty:
         return pd.DataFrame()
@@ -226,7 +229,7 @@ def clean_practice_laps(session):
     return clean
 
 
-def practice_session_frame(session):
+def practice_session_frame(session: fastf1.core.Session) -> pd.DataFrame | None:
     clean = clean_practice_laps(session)
     if clean.empty:
         return None
@@ -248,7 +251,7 @@ def practice_session_frame(session):
     })
 
 
-def practice_features(year, round_number, sessions):
+def practice_features(year: int, round_number: int, sessions: Iterable[str]) -> pd.DataFrame:
     """Aggregate practice pace features over the given session identifiers:
     ("FP1", "FP2", "FP3") for the race pipeline, ("FP1", "FP2") for the grid
     pipeline (day-before-quali constraint)."""
@@ -272,8 +275,11 @@ def practice_features(year, round_number, sessions):
     )
 
 
-def collect_season(year, schedule, *, filename, required_columns, result_column,
-                   load_round, refresh=False, rate_limit_wait=None):
+def collect_season(year: int, schedule: pd.DataFrame, *, filename: str,
+                   required_columns: Collection[str], result_column: str,
+                   load_round: Callable[[int, int, str], pd.DataFrame],
+                   refresh: bool = False,
+                   rate_limit_wait: float | None = None) -> pd.DataFrame:
     """Fetch completed rounds into the season CSV, reusing whatever is cached.
 
     filename         CSV name pattern, e.g. "season_{year}.csv"
@@ -347,7 +353,8 @@ def collect_season(year, schedule, *, filename, required_columns, result_column,
     return data
 
 
-def make_model(categorical_features, profile="fast", tuned_params=None):
+def make_model(categorical_features: Sequence[int], profile: str = "fast",
+              tuned_params: dict[str, int | float] | None = None) -> HistGradientBoostingRegressor:
     """HistGradientBoostingRegressor for the given profile.
 
     fast      — FAST_PARAMS, the project's fixed hyperparameters (quick).
@@ -367,8 +374,10 @@ def make_model(categorical_features, profile="fast", tuned_params=None):
     )
 
 
-def tune_hyperparameters(X, y, rounds, categorical_features=None,
-                         n_iter=TUNE_N_ITER, random_state=TUNE_RANDOM_STATE):
+def tune_hyperparameters(X: ArrayLike, y: ArrayLike, rounds: ArrayLike,
+                         categorical_features: Sequence[int] | None = None,
+                         n_iter: int = TUNE_N_ITER,
+                         random_state: int = TUNE_RANDOM_STATE) -> dict[str, int | float] | None:
     """Search TUNED_SEARCH_SPACE for the combination with the lowest
     cross-validated MAE on one model's training set.
 
@@ -456,14 +465,14 @@ def tune_hyperparameters(X, y, rounds, categorical_features=None,
     return best_params
 
 
-def format_params(params):
+def format_params(params: Mapping[str, object] | None) -> str:
     """Compact one-line rendering of a hyperparameter dict for reports."""
     if not params:
         return ""
     return ", ".join(f"{key}={value}" for key, value in params.items())
 
 
-def rank_corr(a, b):
+def rank_corr(a: ArrayLike, b: ArrayLike) -> float:
     ra = pd.Series(a).rank().to_numpy()
     rb = pd.Series(b).rank().to_numpy()
     if np.std(ra) == 0 or np.std(rb) == 0:
@@ -471,7 +480,8 @@ def rank_corr(a, b):
     return float(np.corrcoef(ra, rb)[0, 1])
 
 
-def importance_scores(model, feature_names, X, target, n_repeats=5):
+def importance_scores(model: HistGradientBoostingRegressor, feature_names: Sequence[str],
+                      X: ArrayLike, target: ArrayLike, n_repeats: int = 5) -> pd.DataFrame:
     """Permutation importance (MAE increase when shuffled) as a DataFrame,
     ordered like the CLI report (descending importance)."""
     result = permutation_importance(
@@ -488,7 +498,9 @@ def importance_scores(model, feature_names, X, target, n_repeats=5):
     })
 
 
-def importance_report(model, feature_names, X, target, label, width=24):
+def importance_report(model: HistGradientBoostingRegressor, feature_names: Sequence[str],
+                      X: ArrayLike, target: ArrayLike, label: str,
+                      width: int = 24) -> None:
     print(f"\nFeature importance ({label} model, permutation, increase in MAE when shuffled):")
     for row in importance_scores(model, feature_names, X, target).itertuples():
         spread = f" ±{row.std:.3f}" if VERBOSITY >= 2 else ""
