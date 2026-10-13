@@ -1,4 +1,4 @@
-fastf1>=3.8
+fastf1>=3.8,<5  # upper bound: a major upstream release shouldn't break the app deploy silently; upgrade deliberately
 numpy>=2.0
 pandas>=2.2
 scikit-learn>=1.6

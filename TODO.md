@@ -41,7 +41,7 @@
 - [ ] Parallelize the backtest across rounds (folds are independent) with joblib.
 - [ ] Lint/format setup (ruff) + pre-commit hooks.
 - [ ] Type hints on `f1_common`'s public helpers.
-- [ ] Pin the fastf1 upper bound (`fastf1>=3.8,<5`) so a major upstream release can't break the app deploy silently; upgrade deliberately instead.
+- [x] Pin the fastf1 upper bound — done: `fastf1>=3.8,<5` in requirements.txt (CI + refresh-data workflows install from it, as does the app deploy).
 - [ ] Notify on refresh-data failures — the 6-hour scheduled workflow keeps the hosted app fed; GitHub's default failure emails are easy to miss, so add an explicit notify step or a stale-data banner in the app.
 
 ## Maybe / exploratory
