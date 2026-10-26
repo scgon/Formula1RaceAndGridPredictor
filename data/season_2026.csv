@@ -367,9 +367,31 @@ round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_ra
 17,Singapore Grand Prix,43,COL,Alpine F1 Team,15.0,93.261,21.0,0.0,Retired,,,,11.0,19.0,-8.0,1.887999999999991
 17,Singapore Grand Prix,44,HAM,Ferrari,3.0,91.496,6.0,8.0,Finished,,,,6.0,2.0,4.0,0.1229999999999904
 17,Singapore Grand Prix,5,BOR,Audi,14.0,93.658,22.0,0.0,Retired,,,,14.0,16.0,-2.0,2.2849999999999966
-17,Singapore Grand Prix,55,SAI,Williams,13.0,93.526,14.0,0.0,Lapped,,,,22.0,12.0,10.0,2.1529999999999916
+17,Singapore Grand Prix,55,SAI,Williams,13.0,93.526,14.0,0.0,Lapped,,,,22.0,12.0,10.0,2.152999999999992
 17,Singapore Grand Prix,6,HAD,Red Bull,22.0,,10.0,1.0,Finished,,,,9.0,18.0,-9.0,
 17,Singapore Grand Prix,63,RUS,Mercedes,19.0,91.747,9.0,2.0,Finished,,,,2.0,20.0,-18.0,0.3739999999999952
 17,Singapore Grand Prix,77,BOT,Cadillac F1 Team,18.0,95.984,19.0,0.0,Lapped,,,,21.0,17.0,4.0,4.61099999999999
 17,Singapore Grand Prix,81,PIA,McLaren,6.0,91.86,5.0,10.0,Finished,,,,4.0,14.0,-10.0,0.4869999999999947
 17,Singapore Grand Prix,87,BEA,Haas F1 Team,11.0,92.908,12.0,0.0,Lapped,,,,13.0,6.0,7.0,1.5349999999999966
+18,United States Grand Prix,1,NOR,McLaren,8.0,94.539,5.0,10.0,Finished,,,,,,,0.5040000000000049
+18,United States Grand Prix,10,GAS,Alpine F1 Team,10.0,95.08,10.0,1.0,Finished,,,,,,,1.0450000000000017
+18,United States Grand Prix,11,PER,Cadillac F1 Team,18.0,97.433,19.0,0.0,Lapped,,,,,,,3.3980000000000103
+18,United States Grand Prix,12,ANT,Mercedes,1.0,94.035,1.0,25.0,Finished,,,,,,,0.0
+18,United States Grand Prix,14,ALO,Aston Martin,12.0,95.818,16.0,0.0,Lapped,,,,,,,1.7830000000000013
+18,United States Grand Prix,16,LEC,Ferrari,4.0,94.198,2.0,18.0,Finished,,,,,,,0.1629999999999967
+18,United States Grand Prix,18,STR,Aston Martin,22.0,96.677,15.0,0.0,Lapped,,,,,,,2.64200000000001
+18,United States Grand Prix,23,ALB,Williams,17.0,96.967,17.0,0.0,Lapped,,,,,,,2.932000000000002
+18,United States Grand Prix,27,HUL,Audi,11.0,95.158,11.0,0.0,Finished,,,,,,,1.1230000000000047
+18,United States Grand Prix,3,VER,Red Bull,2.0,94.214,3.0,15.0,Finished,,,,,,,0.17900000000000205
+18,United States Grand Prix,30,LAW,RB F1 Team,9.0,95.058,9.0,2.0,Finished,,,,,,,1.0230000000000103
+18,United States Grand Prix,31,OCO,Haas F1 Team,15.0,96.531,14.0,0.0,Lapped,,,,,,,2.4960000000000093
+18,United States Grand Prix,41,LIN,RB F1 Team,14.0,94.95,12.0,0.0,Lapped,,,,,,,0.9150000000000063
+18,United States Grand Prix,43,COL,Alpine F1 Team,20.0,95.722,21.0,0.0,Retired,,,,,,,1.6869999999999976
+18,United States Grand Prix,44,HAM,Ferrari,5.0,94.311,4.0,12.0,Finished,,,,,,,0.27600000000001046
+18,United States Grand Prix,5,BOR,Audi,21.0,95.632,13.0,0.0,Lapped,,,,,,,1.5970000000000084
+18,United States Grand Prix,55,SAI,Williams,16.0,96.77,18.0,0.0,Lapped,,,,,,,2.7349999999999994
+18,United States Grand Prix,6,HAD,Red Bull,3.0,94.25,6.0,8.0,Finished,,,,,,,0.2150000000000034
+18,United States Grand Prix,63,RUS,Mercedes,6.0,94.305,8.0,4.0,Finished,,,,,,,0.27000000000001023
+18,United States Grand Prix,77,BOT,Cadillac F1 Team,19.0,97.523,20.0,0.0,Retired,,,,,,,3.4879999999999995
+18,United States Grand Prix,81,PIA,McLaren,7.0,94.803,7.0,6.0,Finished,,,,,,,0.7680000000000007
+18,United States Grand Prix,87,BEA,Haas F1 Team,13.0,96.031,22.0,0.0,Retired,,,,,,,1.9960000000000093
