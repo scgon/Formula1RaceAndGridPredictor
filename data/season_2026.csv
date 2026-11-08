@@ -395,16 +395,16 @@ round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_ra
 18,United States Grand Prix,77,BOT,Cadillac F1 Team,19.0,97.523,20.0,0.0,Retired,,,,,,,3.4879999999999995
 18,United States Grand Prix,81,PIA,McLaren,7.0,94.803,7.0,6.0,Finished,,,,,,,0.7680000000000007
 18,United States Grand Prix,87,BEA,Haas F1 Team,13.0,96.031,22.0,0.0,Retired,,,,,,,1.996000000000009
-19,Mexico City Grand Prix,1,NOR,McLaren,6.0,76.728,5.0,10.0,Finished,,,,,,,0.21399999999999864
+19,Mexico City Grand Prix,1,NOR,McLaren,6.0,76.728,5.0,10.0,Finished,,,,,,,0.2139999999999986
 19,Mexico City Grand Prix,10,GAS,Alpine F1 Team,9.0,77.153,10.0,1.0,Finished,,,,,,,0.63900000000001
 19,Mexico City Grand Prix,11,PER,Cadillac F1 Team,20.0,79.105,17.0,0.0,Finished,,,,,,,2.591000000000008
-19,Mexico City Grand Prix,12,ANT,Mercedes,4.0,76.707,3.0,15.0,Finished,,,,,,,0.19299999999999784
-19,Mexico City Grand Prix,14,ALO,Aston Martin,17.0,78.908,22.0,0.0,Retired,,,,,,,2.3940000000000055
-19,Mexico City Grand Prix,16,LEC,Ferrari,3.0,76.633,4.0,12.0,Finished,,,,,,,0.11899999999999977
+19,Mexico City Grand Prix,12,ANT,Mercedes,4.0,76.707,3.0,15.0,Finished,,,,,,,0.1929999999999978
+19,Mexico City Grand Prix,14,ALO,Aston Martin,17.0,78.908,22.0,0.0,Retired,,,,,,,2.394000000000005
+19,Mexico City Grand Prix,16,LEC,Ferrari,3.0,76.633,4.0,12.0,Finished,,,,,,,0.1189999999999997
 19,Mexico City Grand Prix,18,STR,Aston Martin,19.0,79.072,21.0,0.0,Retired,,,,,,,2.558000000000007
-19,Mexico City Grand Prix,23,ALB,Williams,16.0,78.63,14.0,0.0,Finished,,,,,,,2.1159999999999997
+19,Mexico City Grand Prix,23,ALB,Williams,16.0,78.63,14.0,0.0,Finished,,,,,,,2.116
 19,Mexico City Grand Prix,27,HUL,Audi,10.0,77.306,16.0,0.0,Finished,,,,,,,0.7920000000000016
-19,Mexico City Grand Prix,3,VER,Red Bull,5.0,76.692,1.0,25.0,Finished,,,,,,,0.17799999999999727
+19,Mexico City Grand Prix,3,VER,Red Bull,5.0,76.692,1.0,25.0,Finished,,,,,,,0.1779999999999972
 19,Mexico City Grand Prix,30,LAW,RB F1 Team,22.0,77.029,9.0,2.0,Finished,,,,,,,0.5150000000000006
 19,Mexico City Grand Prix,41,LIN,RB F1 Team,8.0,77.117,18.0,0.0,Retired,,,,,,,0.6030000000000086
 19,Mexico City Grand Prix,43,COL,Alpine F1 Team,11.0,77.64,8.0,4.0,Finished,,,,,,,1.1260000000000048
@@ -413,7 +413,29 @@ round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_ra
 19,Mexico City Grand Prix,50,HIR,Haas F1 Team,18.0,78.958,13.0,0.0,Finished,,,,,,,2.4440000000000026
 19,Mexico City Grand Prix,55,SAI,Williams,15.0,78.521,15.0,0.0,Finished,,,,,,,2.007000000000005
 19,Mexico City Grand Prix,6,HAD,Red Bull,7.0,76.9,12.0,0.0,Finished,,,,,,,0.3860000000000099
-19,Mexico City Grand Prix,63,RUS,Mercedes,2.0,76.523,6.0,8.0,Finished,,,,,,,0.009000000000000341
+19,Mexico City Grand Prix,63,RUS,Mercedes,2.0,76.523,6.0,8.0,Finished,,,,,,,0.0090000000000003
 19,Mexico City Grand Prix,77,BOT,Cadillac F1 Team,21.0,79.852,20.0,0.0,Retired,,,,,,,3.338000000000008
 19,Mexico City Grand Prix,81,PIA,McLaren,12.0,77.646,7.0,6.0,Finished,,,,,,,1.132000000000005
 19,Mexico City Grand Prix,87,BEA,Haas F1 Team,14.0,78.083,19.0,0.0,Retired,,,,,,,1.5690000000000026
+20,São Paulo Grand Prix,1,NOR,McLaren,,,1.0,25.0,Finished,,,,,,,
+20,São Paulo Grand Prix,10,GAS,Alpine F1 Team,,,14.0,0.0,Lapped,,,,,,,
+20,São Paulo Grand Prix,11,PER,Cadillac F1 Team,,,18.0,0.0,Lapped,,,,,,,
+20,São Paulo Grand Prix,12,ANT,Mercedes,,,5.0,10.0,Finished,,,,,,,
+20,São Paulo Grand Prix,14,ALO,Aston Martin,,,12.0,0.0,Lapped,,,,,,,
+20,São Paulo Grand Prix,16,LEC,Ferrari,,,7.0,6.0,Finished,,,,,,,
+20,São Paulo Grand Prix,18,STR,Aston Martin,,,21.0,0.0,Retired,,,,,,,
+20,São Paulo Grand Prix,23,ALB,Williams,,,15.0,0.0,Lapped,,,,,,,
+20,São Paulo Grand Prix,27,HUL,Audi,,,10.0,1.0,Lapped,,,,,,,
+20,São Paulo Grand Prix,3,VER,Red Bull,,,2.0,18.0,Finished,,,,,,,
+20,São Paulo Grand Prix,30,LAW,RB F1 Team,,,8.0,4.0,Finished,,,,,,,
+20,São Paulo Grand Prix,41,LIN,RB F1 Team,,,11.0,0.0,Lapped,,,,,,,
+20,São Paulo Grand Prix,43,COL,Alpine F1 Team,,,13.0,0.0,Lapped,,,,,,,
+20,São Paulo Grand Prix,44,HAM,Ferrari,,,9.0,2.0,Lapped,,,,,,,
+20,São Paulo Grand Prix,5,BOR,Audi,,,16.0,0.0,Lapped,,,,,,,
+20,São Paulo Grand Prix,51,nan,Haas F1 Team,,,20.0,0.0,Lapped,,,,,,,
+20,São Paulo Grand Prix,55,SAI,Williams,,,19.0,0.0,Lapped,,,,,,,
+20,São Paulo Grand Prix,6,HAD,Red Bull,,,3.0,15.0,Finished,,,,,,,
+20,São Paulo Grand Prix,63,RUS,Mercedes,,,4.0,12.0,Finished,,,,,,,
+20,São Paulo Grand Prix,77,BOT,Cadillac F1 Team,,,22.0,0.0,Did not start,,,,,,,
+20,São Paulo Grand Prix,81,PIA,McLaren,,,6.0,8.0,Finished,,,,,,,
+20,São Paulo Grand Prix,87,BEA,Haas F1 Team,,,17.0,0.0,Lapped,,,,,,,
