@@ -120,6 +120,23 @@ def test_get_prices_and_fallbacks():
     assert 5.0 <= c_p["UNKNOWN_TEAM"] <= 30.0
 
 
+def test_official_prices_override_stale_csv(monkeypatch):
+    monkeypatch.setattr(
+        predict_fantasy,
+        "official_price_snapshot",
+        lambda year, target_round: (
+            {"VER": 27.3, "NOR": 27.0},
+            {"Red Bull Racing": 31.8, "McLaren": 31.9},
+        ),
+    )
+    drivers, constructors = predict_fantasy.get_prices(
+        2026, ["VER", "NOR"], ["Red Bull", "McLaren"], target_round=15)
+    assert drivers["VER"] == 27.3
+    assert drivers["NOR"] == 27.0
+    assert constructors["Red Bull"] == 31.8
+    assert constructors["McLaren"] == 31.9
+
+
 def test_optimize_team_budget_and_drs():
     # 6 drivers and 3 constructors
     d_df = pd.DataFrame([

@@ -17,8 +17,11 @@ Shared machinery lives in f1_common.py.
 import argparse
 import heapq
 import itertools
+import json
+from functools import lru_cache
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Sequence, Tuple
+from urllib.request import Request, urlopen
 
 import numpy as np
 import pandas as pd
@@ -55,6 +58,8 @@ FEATURES = [
 ]
 
 PRICES_FILE = common.DATA_DIR / "fantasy_prices.csv"
+FANTASY_FEED_BASE = "https://fantasy.formula1.com"
+FANTASY_SCHEDULE_URL = f"{FANTASY_FEED_BASE}/feeds/schedule/raceday_en.json"
 
 setup = common.setup
 utc_now = common.utc_now
@@ -214,18 +219,117 @@ def load_price_table() -> pd.DataFrame:
     return pd.DataFrame(columns=["year", "type", "name", "price"])
 
 
+def _read_json(url: str) -> Any:
+    """Read a public F1 Fantasy feed without adding a requests dependency."""
+    request = Request(url, headers={"User-Agent": "F1RaceAndGridPredictor/1.0"})
+    with urlopen(request, timeout=8) as response:
+        return json.load(response)
+
+
+@lru_cache(maxsize=1)
+def _official_gamedays() -> Dict[Tuple[int, int], int]:
+    """Return {(season, round): official fantasy game-day id}.
+
+    The Fantasy service uses game-day IDs rather than Formula 1 round numbers.
+    Keeping this mapping separate also handles calendars where the two numbers
+    diverge (postponements or non-race game days).
+    """
+    payload = _read_json(FANTASY_SCHEDULE_URL)
+    rows = payload.get("Data", {}).get("Value", [])
+    result = {}
+    for row in rows:
+        try:
+            season = int(row["Season"])
+            round_number = int(row["MeetingNumber"])
+            game_day = int(row["GamedayId"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        result[(season, round_number)] = game_day
+    return result
+
+
+@lru_cache(maxsize=64)
+def official_price_snapshot(year: int, target_round: int) -> Optional[Tuple[Dict[str, float], Dict[str, float]]]:
+    """Fetch official driver/constructor prices for a Fantasy game day.
+
+    Returns ``None`` on an unavailable/stale feed so callers can use the
+    bundled snapshot. The feed contains duplicate historical driver entries
+    after transfers; active entries are preferred to inactive ones.
+    """
+    try:
+        game_day = _official_gamedays().get((int(year), int(target_round)))
+        if game_day is None:
+            return None
+        payload = _read_json(f"{FANTASY_FEED_BASE}/feeds/drivers/{game_day}_en.json")
+        rows = payload.get("Data", {}).get("Value", [])
+    except Exception:
+        return None
+
+    drivers: Dict[str, Tuple[int, float]] = {}
+    constructors: Dict[str, float] = {}
+    for row in rows:
+        try:
+            price = float(row["Value"])
+            kind = str(row.get("PositionName", "")).upper()
+        except (KeyError, TypeError, ValueError):
+            continue
+        if price <= 0:
+            continue
+        if kind == "DRIVER":
+            name = str(row.get("DriverTLA", "")).upper()
+            if not name:
+                continue
+            active = int(str(row.get("IsActive", "0")) == "1")
+            previous = drivers.get(name)
+            if previous is None or active > previous[0]:
+                drivers[name] = (active, price)
+        elif kind == "CONSTRUCTOR":
+            name = str(row.get("FUllName") or row.get("DisplayName") or "").strip()
+            if name:
+                constructors[name] = price
+    if not drivers or not constructors:
+        return None
+    return ({name: price for name, (_active, price) in drivers.items()}, constructors)
+
+
+def _official_constructor_price(name: str, prices: Dict[str, float]) -> Optional[float]:
+    """Resolve historical constructor names to the official feed name."""
+    if name in prices:
+        return prices[name]
+    aliases = {
+        "Red Bull": "Red Bull Racing",
+        "RB F1 Team": "Racing Bulls",
+        "AlphaTauri": "Racing Bulls",
+        "Toro Rosso": "Racing Bulls",
+        "Alpine F1 Team": "Alpine",
+        "Renault": "Alpine",
+        "Sauber": "Audi",
+        "Alfa Romeo": "Audi",
+        "Aston Martin": "Aston Martin",
+        "Haas": "Haas F1 Team",
+    }
+    mapped = aliases.get(name)
+    return prices.get(mapped) if mapped else None
+
+
 def get_prices(year: int, drivers: Sequence[str], constructors: Sequence[str],
-               season_points: Optional[Dict[str, float]] = None) -> Tuple[Dict[str, float], Dict[str, float]]:
+               season_points: Optional[Dict[str, float]] = None,
+               target_round: Optional[int] = None) -> Tuple[Dict[str, float], Dict[str, float]]:
     """Return ({driver -> price}, {constructor -> price}) in millions.
 
-    Uses data/fantasy_prices.csv first; falls back to performance-based
-    scaling if an asset is missing.
+    Uses the official F1 Fantasy price feed for a target round when available.
+    The tracked CSV is an offline fallback, followed by bounded performance-
+    based scaling for an asset missing from both sources.
     """
     tbl = load_price_table()
     y_tbl = tbl[tbl["year"] == year] if not tbl.empty else pd.DataFrame()
 
     d_prices = {}
     c_prices = {}
+
+    official = (official_price_snapshot(year, target_round)
+                if target_round is not None else None)
+    official_drivers, official_constructors = official or ({}, {})
 
     for _, row in y_tbl.iterrows():
         p_type = str(row["type"]).lower()
@@ -235,6 +339,16 @@ def get_prices(year: int, drivers: Sequence[str], constructors: Sequence[str],
             d_prices[name] = price
         elif p_type == "constructor":
             c_prices[name] = price
+
+    # Official prices are target-game-day prices and therefore supersede a
+    # stale season snapshot. Only requested assets are copied through.
+    for name in drivers:
+        if name in official_drivers:
+            d_prices[name] = official_drivers[name]
+    for name in constructors:
+        official_price = _official_constructor_price(name, official_constructors)
+        if official_price is not None:
+            c_prices[name] = official_price
 
     # Fallback for any missing drivers
     for d in drivers:
@@ -664,7 +778,8 @@ def backtest_records(features: pd.DataFrame, min_train_rounds: int = MIN_TRAIN_R
         # Get prices
         round_drivers = features[features["round"] == target_round]["driver"].unique()
         round_teams = features[features["round"] == target_round]["team"].unique()
-        d_prices, c_prices = get_prices(year, round_drivers, round_teams)
+        d_prices, c_prices = get_prices(
+            year, round_drivers, round_teams, target_round=target_round)
 
         # Baseline predictions: driver season average so far
         baseline_df = features[features["round"] == target_round].copy()
@@ -733,7 +848,8 @@ def final_predictions(features: pd.DataFrame, target_round: int, profile: str = 
 
     round_drivers = features[features["round"] == target_round]["driver"].unique()
     round_teams = features[features["round"] == target_round]["team"].unique()
-    d_prices, c_prices = get_prices(year, round_drivers, round_teams)
+    d_prices, c_prices = get_prices(
+        year, round_drivers, round_teams, target_round=target_round)
 
     delta_model = direct_model = None
     delta_features = direct_features = None
