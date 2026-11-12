@@ -1,0 +1,106 @@
+year,type,name,price
+2024,driver,VER,30.0
+2024,driver,NOR,28.0
+2024,driver,LEC,24.0
+2024,driver,PIA,22.0
+2024,driver,RUS,20.0
+2024,driver,HAM,19.5
+2024,driver,SAI,18.5
+2024,driver,PER,15.0
+2024,driver,ALO,12.0
+2024,driver,STR,8.5
+2024,driver,TSU,8.0
+2024,driver,HUL,7.5
+2024,driver,ALB,7.5
+2024,driver,GAS,7.0
+2024,driver,OCO,7.0
+2024,driver,RIC,7.0
+2024,driver,LAW,7.0
+2024,driver,MAG,6.5
+2024,driver,BEA,6.5
+2024,driver,BOT,5.5
+2024,driver,ZHO,5.0
+2024,driver,SAR,4.5
+2024,driver,COL,5.0
+2024,driver,DOO,5.0
+2024,constructor,McLaren,29.0
+2024,constructor,Red Bull,28.0
+2024,constructor,Red Bull Racing,28.0
+2024,constructor,Ferrari,26.0
+2024,constructor,Mercedes,22.0
+2024,constructor,Aston Martin,13.0
+2024,constructor,RB F1 Team,9.5
+2024,constructor,Haas F1 Team,8.5
+2024,constructor,Alpine F1 Team,8.0
+2024,constructor,Williams,7.5
+2024,constructor,Sauber,5.5
+2025,driver,VER,29.5
+2025,driver,NOR,28.5
+2025,driver,LEC,25.0
+2025,driver,PIA,23.5
+2025,driver,RUS,21.0
+2025,driver,HAM,20.5
+2025,driver,SAI,17.5
+2025,driver,ANT,12.5
+2025,driver,ALO,11.5
+2025,driver,STR,8.5
+2025,driver,TSU,8.0
+2025,driver,HUL,8.0
+2025,driver,ALB,8.0
+2025,driver,GAS,7.5
+2025,driver,OCO,7.5
+2025,driver,LAW,7.5
+2025,driver,BEA,7.0
+2025,driver,COL,6.0
+2025,driver,DOO,5.5
+2025,driver,BOR,5.0
+2025,driver,HAD,5.0
+2025,constructor,McLaren,29.5
+2025,constructor,Ferrari,27.0
+2025,constructor,Red Bull,26.5
+2025,constructor,Red Bull Racing,26.5
+2025,constructor,Mercedes,22.5
+2025,constructor,Aston Martin,12.5
+2025,constructor,Haas F1 Team,9.0
+2025,constructor,RB F1 Team,9.0
+2025,constructor,Williams,8.0
+2025,constructor,Alpine F1 Team,8.0
+2025,constructor,Sauber,5.5
+2026,driver,VER,29.0
+2026,driver,NOR,28.5
+2026,driver,LEC,25.5
+2026,driver,PIA,24.0
+2026,driver,RUS,21.5
+2026,driver,HAM,20.0
+2026,driver,SAI,17.0
+2026,driver,ANT,13.0
+2026,driver,ALO,11.0
+2026,driver,STR,8.5
+2026,driver,TSU,8.0
+2026,driver,HUL,8.0
+2026,driver,ALB,8.0
+2026,driver,GAS,7.5
+2026,driver,OCO,7.5
+2026,driver,LAW,7.5
+2026,driver,BEA,7.0
+2026,driver,COL,6.5
+2026,driver,BOR,5.5
+2026,driver,HAD,5.5
+2026,driver,BOT,5.5
+2026,driver,LIN,5.0
+2026,driver,PER,12.0
+2026,constructor,McLaren,29.5
+2026,constructor,Ferrari,27.0
+2026,constructor,Red Bull,26.0
+2026,constructor,Red Bull Racing,26.0
+2026,constructor,Mercedes,23.0
+2026,constructor,Aston Martin,12.0
+2026,constructor,Haas F1 Team,9.0
+2026,constructor,RB F1 Team,9.0
+2026,constructor,Racing Bulls,9.0
+2026,constructor,Williams,8.5
+2026,constructor,Alpine,8.0
+2026,constructor,Alpine F1 Team,8.0
+2026,constructor,Audi,7.0
+2026,constructor,Cadillac,6.0
+2026,constructor,Cadillac F1 Team,6.0

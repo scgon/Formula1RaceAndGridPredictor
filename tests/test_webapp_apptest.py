@@ -25,7 +25,8 @@ PAGES = REPO_ROOT / "webapp"
 # target-selectbox key -> the season CSV the page's Run resolves from
 SEASON_CSV = {"race_target": "season_{year}.csv",
               "grid_target": "quali_season_{year}.csv",
-              "extras_target": "extras_season_{year}.csv"}
+              "extras_target": "extras_season_{year}.csv",
+              "fantasy_target": "season_{year}.csv"}
 
 
 def _completed_target_label(at, key):
@@ -61,6 +62,13 @@ def test_home_page_renders():
     at.run()
     assert not at.exception
     assert at.title[0].value.startswith("Formula 1")
+
+
+def test_fantasy_page_renders():
+    at = AppTest.from_file(str(PAGES / "page_fantasy.py"), default_timeout=300)
+    at.run()
+    assert not at.exception
+    assert at.title[0].value.startswith("F1 Fantasy")
 
 
 @pytest.mark.slow
@@ -191,5 +199,19 @@ def test_extras_champion_page_full_run_on_a_completed_season():
     assert any("Review" in s.value for s in at.subheader)
     assert at.dataframe  # the probability table rendered
     assert any("the model's call was a" in i.value for i in at.info)  # scored
+
+
+@pytest.mark.slow
+def test_fantasy_page_full_run_on_a_completed_round():
+    at = AppTest.from_file(str(PAGES / "page_fantasy.py"), default_timeout=900)
+    at.run()
+    assert not at.exception
+    at.sidebar.selectbox(key="fantasy_target").set_value(
+        _completed_target_label(at, "fantasy_target"))
+    at.sidebar.button(key="fantasy_run").click()
+    at.run()
+    assert not at.exception and not at.error
+    assert any("Optimal" in s.value for s in at.subheader)
+    assert at.dataframe  # optimal roster dataframe rendered
 
 

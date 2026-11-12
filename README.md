@@ -1,6 +1,6 @@
 # Formula 1 Race & Grid Predictor
 
-A Python project that predicts Formula 1 race results, qualifying grids, final championship standings and weekend milestone outcomes using historical data from fastf1 and machine learning models built with scikit-learn.
+A Python project that predicts Formula 1 race results, qualifying grids, final championship standings, weekend milestone outcomes, and optimal F1 Fantasy lineups using historical data from fastf1 and machine learning models built with scikit-learn.
 
 [![Tests](https://github.com/scgon/Formula1RaceAndGridPredictor/actions/workflows/tests.yml/badge.svg)](https://github.com/scgon/Formula1RaceAndGridPredictor/actions/workflows/tests.yml)
 
@@ -8,12 +8,13 @@ Live app: https://formula1predictions.streamlit.app
 
 ## Overview
 
-This project combines four independent prediction pipelines with a Streamlit web app:
+This project combines five independent prediction pipelines with a Streamlit web app:
 
 - Race prediction: predict finishing positions for an upcoming or completed race
 - Grid prediction: predict qualifying positions for an upcoming or completed qualifying session
 - Championship prediction: project the final drivers' or constructors' championship points table as of any completed round
 - Milestone predictions: predict one selected target per run, such as pole sitter, race winner, race podium (top-three finish), first retirement, fastest lap, sprint pole, sprint winner, or championship winner
+- F1 Fantasy optimizer: predict driver fantasy points, then optimize five drivers, two constructors, and a DRS booster under a budget cap
 
 The app and the CLI both use the same shared data-loading and training logic, so results stay consistent across interfaces.
 
@@ -28,6 +29,7 @@ The app and the CLI both use the same shared data-loading and training logic, so
 │   ├── predict_grid.py            # qualifying/grid pipeline
 │   ├── predict_championship.py    # championship standings pipeline
 │   ├── predict_extras.py          # milestone pipeline
+│   ├── predict_fantasy.py         # fantasy scoring, prediction and lineup optimizer
 │   └── ...
 ├── webapp/
 │   ├── _bootstrap.py              # stale-module guard for live code pulls
@@ -36,6 +38,7 @@ The app and the CLI both use the same shared data-loading and training logic, so
 │   ├── page_quali.py              # qualifying prediction page
 │   ├── page_championship.py       # championship prediction page
 │   ├── page_extras.py             # milestone prediction page
+│   ├── page_fantasy.py            # fantasy lineup optimizer page
 │   └── webapp_common.py           # app glue, logging, tables, charts, run wrappers
 ├── notebooks/
 │   ├── race_predictions.ipynb     # interactive race pipeline notebook
@@ -108,13 +111,14 @@ From the repo root:
 python -m streamlit run app.py
 ```
 
-The app has five pages:
+The app has six pages:
 
 - Home: next race, data status, methodology overview
 - Race prediction: finish prediction and backtest analysis
 - Qualifying prediction: grid prediction and backtest analysis
 - Championship prediction: projected final points table for drivers or constructors
 - Milestones & extras: pick one milestone model and review driver probabilities
+- Fantasy optimizer: select the highest-scoring legal roster under the budget cap
 
 ### CLI pipelines
 
@@ -144,6 +148,10 @@ python -u pipelines/predict_extras.py --next --milestone winner
 # Championship winner prediction for the current season
 python -u pipelines/predict_extras.py --next --milestone champion
 
+# Optimal fantasy roster for the next race (default $100M cap)
+python -u pipelines/predict_fantasy.py --next
+python -u pipelines/predict_fantasy.py --season 2025 --predict-round 12 --budget 100
+
 # Specific season and round
 python -u pipelines/predict_race.py --season 2025 --predict-round 12
 python -u pipelines/predict_grid.py --season 2025 --predict-round 12
@@ -165,6 +173,7 @@ Common flags:
 --championship {drivers,constructors}   # championship pipeline
 --first-backtest-season YEAR            # championship backtest scope (default: auto)
 --milestone {pole,winner,podium,first_dnf,fastest_lap,sprint_pole,sprint_win,champion}
+--budget MILLIONS                       # fantasy salary cap (default: 100)
 --model {fast,optimized}
 --models {both,gain,direct}      # race pipeline
 --models {both,anchor,direct}    # grid pipeline
@@ -240,6 +249,12 @@ The pipeline stores its own season CSVs (`data/extras_season_*.csv`) because rac
 
 The championship model is the one season-level target: it scores every driver's chance of winning the driver title from the standings before the round (points including the era's sprint points, championship position, gap to the leader) plus form, reliability and practice-pace signals. Because a season's champion is only known once the season ends, it never trains on the target season's own rounds — instead it trains on every bundled earlier season (`data/season_*.csv`, 2018+), so its backtest over a completed season is a genuine out-of-sample review and it can also predict before qualifying runs (the standings already exist). Its naive baseline is the current championship leader.
 
+### 5) Fantasy optimizer (`pipelines/predict_fantasy.py`)
+
+The fantasy pipeline predicts each driver's expected official F1 Fantasy score for a target weekend, derives constructor projections from those driver scores, and solves the roster problem exactly. The recommended team contains **five drivers, two distinct constructors, and one DRS booster** (the booster doubles the selected driver's points). Every candidate roster is enumerated and scored, so the chosen lineup is globally optimal under the configured hard budget cap rather than a greedy points-per-million heuristic. If the cap cannot fit the minimum roster, the pipeline fails clearly instead of returning an illegal over-budget team.
+
+The delta model predicts deviation from each driver's prior season form; the direct model predicts absolute fantasy points. Both use shifted driver/team form, practice pace, qualifying/grid information, sprint results when available, points, and DNF rate. Team aggregates are calculated at team-round granularity before shifting, preventing the second driver in a round from seeing current-round information. Prices come from the tracked `data/fantasy_prices.csv`, with bounded performance-based fallbacks for new entrants. Rolling backtests compare the model lineup with a season-form baseline and the hindsight-optimal dream lineup.
+
 ## Model profiles
 
 The project supports two model profiles:
@@ -286,6 +301,7 @@ Milestone features vary by target:
 - race winner / podium / first retirement / fastest lap: pre-race data plus reliability and milestone history
 - sprint-pole and sprint-win models: sprint-weekend chronology and sprint prior performance
 - championship model: title standings state (corrected points, position, gap to the leader, rounds remaining) plus driver form, reliability and practice pace
+- fantasy model: shifted driver/team fantasy scoring form, practice and qualifying pace, sprint results, points, and DNF rate; the optimizer enforces five drivers, two constructors, and one DRS booster under the cap
 
 The project is careful about unsupported/NaN feature columns: if a training split has a column with all NaN values, the training logic drops it rather than crashing, which is critical for early-round training and for pre-session predictions.
 
@@ -300,6 +316,7 @@ Pages:
 - Qualifying prediction
 - Championship prediction
 - Milestones & extras
+- Fantasy optimizer
 
 App details:
 
@@ -332,9 +349,9 @@ python -m pytest tests -m "not slow"   # fast offline subset (~15s)
 
 It contains:
 
-- offline unit tests for the shared machinery and all four pipelines, run on synthetic frames (feature-engineering shifts, the all-NaN feature guard, target modes, milestone specs, end-to-end train/predict cycles, the fitted-model cache — identical re-runs reuse the fitted model instead of retraining)
+- offline unit tests for the shared machinery and all five pipelines, run on synthetic frames (feature-engineering shifts, the all-NaN feature guard, target modes, milestone specs, fantasy scoring and budget optimization, end-to-end train/predict cycles, the fitted-model cache — identical re-runs reuse the fitted model instead of retraining)
 - schema checks over the bundled `data/*.csv`, reusing the same required-column definitions as the data-refresh workflow, so a schema change fails here exactly when it would force a season regeneration
-- CLI `--help` import smoke tests for all three pipelines
+- CLI `--help` import smoke tests for all five pipelines
 - Streamlit AppTest runs: the homepage renders, plus one full Run per prediction page pinned to the last completed round (marked `slow`; these fetch the small season schedule, so they need network)
 
 CI (`.github/workflows/tests.yml`) runs the whole suite on pushes and pull requests to main, on a Python 3.12 + 3.14 matrix. Scheduled data-refresh commits use `[skip ci]` and do not trigger it.
@@ -348,6 +365,7 @@ python pipelines/predict_race.py --help
 python pipelines/predict_grid.py --help
 python pipelines/predict_championship.py --help
 python pipelines/predict_extras.py --help
+python pipelines/predict_fantasy.py --help
 ```
 
 A representative AppTest loop for page rendering and button execution (the permanent, round-pinned version lives in `tests/test_webapp_apptest.py`):
@@ -362,6 +380,7 @@ for page, run_key in (
     ("webapp/page_quali.py", "grid_run"),
     ("webapp/page_championship.py", "championship_run"),
     ("webapp/page_extras.py", "extras_run"),
+    ("webapp/page_fantasy.py", "fantasy_run"),
 ):
     at = AppTest.from_file(page, default_timeout=900)
     at.run()

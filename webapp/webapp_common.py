@@ -1,9 +1,8 @@
 """Streamlit glue for the F1 prediction web app.
 
-No pipeline logic lives here — this module only wires the four pipelines
-(predict_race / predict_grid / predict_championship / predict_extras, all
-built on f1_common) into Streamlit via run_pipeline / run_championship_pipeline /
-run_extras_pipeline.
+No pipeline logic lives here — this module only wires the five pipelines
+(predict_race / predict_grid / predict_championship / predict_extras /
+predict_fantasy, all built on f1_common) into Streamlit via the run helpers.
 
 Execution is button-gated: changing a widget never starts the pipeline.
 Pressing **Run prediction** executes the whole pipeline once and stores a
@@ -40,13 +39,14 @@ for _p in (_HERE, _HERE.parent / "pipelines"):
 import f1_common
 import predict_championship
 import predict_extras
+import predict_fantasy
 import predict_grid
 import predict_race
 
 f1_common.setup()
 
 MODULES = {"race": predict_race, "grid": predict_grid, "extras": predict_extras,
-           "championship": predict_championship}
+           "championship": predict_championship, "fantasy": predict_fantasy}
 
 CURRENT_YEAR = datetime.now().year
 
@@ -251,7 +251,7 @@ def bundled_years(kind=None):
             year = int(path.stem.split("_")[1])
         except (IndexError, ValueError):
             continue
-        if (kind == "championship"
+        if (kind in ("championship", "fantasy")
                 or (f1_common.DATA_DIR / f"quali_season_{year}.csv").exists()):
             years.add(year)
     if kind == "extras":
@@ -334,7 +334,7 @@ def prepare_features(kind, season, target, mode, event_name, milestone=None):
                 completed = sorted(data["round"].unique())
                 fallback = data[data["round"] == completed[-1]]
                 upcoming = mod.load_upcoming_round(season["year"], target, event_name, fallback)
-            elif kind == "race":
+            elif kind in ("race", "fantasy"):
                 # checked loader downgrades to prequali when quali produced
                 # no results yet (data-provider lag) — no grid to anchor to
                 completed = sorted(data["round"].unique())
@@ -344,7 +344,8 @@ def prepare_features(kind, season, target, mode, event_name, milestone=None):
             else:  # extras builds the upcoming frame from quali results
                 upcoming = mod.load_upcoming_round(season["year"], target, event_name)
             data = pd.concat([data[data["round"] != target], upcoming], ignore_index=True)
-        features = mod.build_features(data)
+        features = (mod.build_features(data, year=season["year"]) if kind == "fantasy"
+                    else mod.build_features(data))
         if kind == "extras" and milestone == "champion":
             year = season["year"]
             schedule = season["schedule"]
@@ -599,6 +600,82 @@ def run_championship_pipeline(year, data_version, force_refresh, selection, min_
         log_box.empty()
 
 
+def run_fantasy_pipeline(year, data_version, force_refresh, selection, min_train,
+                         profile="fast", budget=100.0, models="both"):
+    """Execute the fantasy team optimizer pipeline with the given settings.
+
+    Returns a render bundle for page_fantasy (stored in st.session_state by
+    the caller), or {"error": message} when the run failed. Download progress
+    and training output stream live into a log element.
+    """
+    mod = MODULES["fantasy"]
+    log_box = st.empty()
+    tune_note = " (tuning hyperparameters per model)" if profile == "optimized" else ""
+    try:
+        with capture_stdout(log_box, refresh_secs=0.3):
+            season = load_season("fantasy", year, force_refresh)
+            if season["data"] is None:
+                return {"error": "No fantasy data available for this or the previous season."}
+            used_year = season["year"]
+            target, mode, event_name, resolve_log = resolve_target(
+                "fantasy", selection, used_year, season["schedule"], season["data"],
+                min_train=min_train)
+            prep = prepare_features("fantasy", season, target, mode, event_name)
+            features = prep["features"]
+            mode = prep["mode"]
+
+            with st.spinner(f"Running rolling fantasy backtest{tune_note}..."):
+                records = mod.backtest_records(features, min_train, profile, models,
+                                               budget=budget, year=used_year)
+            with st.spinner("Training models and optimizing team under budget..."):
+                pred = mod.final_predictions(features, target, profile, models,
+                                             budget=budget, year=used_year)
+                imp_delta = (mod.importance_frame(pred, "delta")
+                             if pred.get("delta_model") is not None else None)
+                imp_direct = (mod.importance_frame(pred, "direct")
+                              if pred.get("direct_model") is not None else None)
+
+        return {
+            "settings": (year, data_version, force_refresh, selection, min_train, profile, budget, models),
+            "requested_year": year,
+            "year": used_year,
+            "target": target,
+            "mode": mode,
+            "event": event_name,
+            "budget": budget,
+            "models": models,
+            "resolve_log": resolve_log,
+            "season_log": season["log"],
+            "prep_log": prep["log"],
+            "features": features,
+            "records": records,
+            "pred": pred,
+            "optimal": pred["team_optimal"],
+            "alternatives": pred["alternatives"],
+            "archetypes": pred["archetypes"],
+            "actual_dream": pred["actual_dream"],
+            "d_board": pred["d_board"],
+            "c_board": pred["c_board"],
+            "train_rounds": pred.get("train_rounds", 0),
+            "imp_delta": imp_delta,
+            "imp_direct": imp_direct,
+            "tuned_params": ({"delta": pred["delta_params"], "direct": pred["direct_params"]}
+                             if profile == "optimized" else None),
+        }
+    except TargetUnavailable as exc:
+        return {"error": str(exc)}
+    except RateLimitExceededError:
+        return {"error": "The F1 data API rate limit was hit (500 calls per hour) — "
+                         "this clears within the hour. Rounds fetched so far are saved; "
+                         "press Run prediction again later. On the hosted app the limit is "
+                         "shared with other visitors — running the project locally "
+                         "(`python -m streamlit run app.py`) avoids it."}
+    except Exception as exc:
+        return {"error": f"Pipeline failed: {type(exc).__name__}: {exc}"}
+    finally:
+        log_box.empty()
+
+
 # ---------------------------------------------------------------------------
 # UI helpers
 # ---------------------------------------------------------------------------
@@ -654,7 +731,7 @@ def target_selectbox(kind, schedule, completed_rounds, milestone=None):
     calendar" is offered only while the next upcoming round is one of
     them."""
     label = {"race": "Target race", "grid": "Target qualifying",
-             "extras": "Target weekend"}[kind]
+             "extras": "Target weekend", "fantasy": "Target weekend"}[kind]
     rounds_schedule = schedule
     show_next = True
     help_text = ("Auto follows the same logic as the CLI: predict the next "

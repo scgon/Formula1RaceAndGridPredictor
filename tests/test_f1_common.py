@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from fastf1.exceptions import RateLimitExceededError
+from requests.exceptions import ConnectionError as RequestConnectionError
 from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 
 import f1_common
@@ -434,3 +435,32 @@ def test_collect_season_stops_soft_on_the_rate_limit(monkeypatch, tmp_path, caps
     assert calls == [1]  # the first hit stops the crawl instead of retrying
     assert data.empty
     assert "rate limit" in capsys.readouterr().out.lower()
+
+
+@pytest.mark.parametrize("failure", [
+    f1_common.DataNotLoadedError("data unavailable"),
+    RequestConnectionError("connection dropped"),
+])
+def test_collect_season_retries_transient_load_failures(
+    monkeypatch, tmp_path, capsys, failure
+):
+    monkeypatch.setattr(f1_common, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(f1_common, "TRANSIENT_LOAD_RETRY_SECS", 0)
+    now = f1_common.utc_now()
+    schedule = pd.DataFrame([_schedule_row(1, "One", now - timedelta(days=7))])
+    calls = 0
+
+    def _flaky(year, rn, name):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise failure
+        return _loader_frame(rn)
+
+    data = f1_common.collect_season(
+        2020, schedule, filename="season_{year}.csv",
+        required_columns=REQUIRED, result_column="finish", load_round=_flaky)
+
+    assert calls == 2
+    assert sorted(data["round"].unique()) == [1]
+    assert "retrying round" in capsys.readouterr().out

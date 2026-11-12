@@ -55,3 +55,13 @@ def test_team_colors_bundle_is_wellformed():
     for path in _bundled("season_"):
         year = int(path.stem.split("_")[1])
         assert year in set(per_year.index), f"{path.name} has no bundled colors"
+
+
+def test_fantasy_price_bundle_is_wellformed():
+    path = f1_common.DATA_DIR / "fantasy_prices.csv"
+    frame = pd.read_csv(path)
+    assert list(frame.columns) == ["year", "type", "name", "price"]
+    assert set(frame["type"]) == {"driver", "constructor"}
+    assert frame["name"].notna().all()
+    assert (frame["price"] > 0).all()
+    assert frame.groupby(["year", "type", "name"]).size().max() == 1

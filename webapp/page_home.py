@@ -19,7 +19,7 @@ import webapp_common as wc
 
 st.title("Formula 1 Race & Grid Predictor")
 st.caption("Machine-learning predictions for F1 race results, qualifying grids, weekend "
-           "milestones and championship standings, built on "
+           "milestones, championship standings and fantasy lineups, built on "
            "[fastf1](https://github.com/theOehrly/fastf1) data and gradient boosting.")
 
 # --- next race banner -----------------------------------------------------
@@ -46,9 +46,9 @@ except Exception:
     st.caption("Race calendar unavailable (offline) — predictions still work from cached data.")
 
 # --- the pipelines ---------------------------------------------------------
-st.subheader("Four pipelines: race and qualifying order, the championship table, and weekend milestones")
+st.subheader("Five pipelines: race and qualifying order, championship, milestones, and fantasy")
 
-race_col, grid_col, champ_col, extras_col = st.columns(4)
+race_col, grid_col, champ_col, extras_col, fantasy_col = st.columns(5)
 
 with race_col:
     st.markdown("##### :material/sports_score: Race prediction")
@@ -143,6 +143,23 @@ with extras_col:
             "only known once it ends."
         )
     wc.page_link("webapp/page_extras.py", label="Open milestones & extras", icon=":material/emoji_events:")
+
+with fantasy_col:
+    st.markdown("##### :material/stars: Fantasy optimizer")
+    st.markdown(
+        "Predicts expected F1 Fantasy points and selects the globally optimal legal roster.\n\n"
+        "- **5 drivers + 2 constructors**\n"
+        "- **DRS booster** doubles one driver's score\n"
+        "- **Hard budget cap** (default $100M)\n"
+        "- Delta and direct points models"
+    )
+    with st.expander("Fantasy model"):
+        st.markdown(
+            "Driver and constructor projections use shifted fantasy scoring form, practice pace, "
+            "qualifying/grid data, sprint results, points and DNF rate. The optimizer enumerates "
+            "legal rosters rather than greedily selecting points-per-million."
+        )
+    wc.page_link("webapp/page_fantasy.py", label="Open fantasy optimizer", icon=":material/stars:")
 
 st.divider()
 

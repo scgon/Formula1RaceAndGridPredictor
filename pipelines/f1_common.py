@@ -28,7 +28,8 @@ from numpy.typing import ArrayLike
 import pandas as pd
 import sklearn
 import fastf1
-from fastf1.exceptions import RateLimitExceededError
+from fastf1.exceptions import DataNotLoadedError, RateLimitExceededError
+from requests.exceptions import RequestException
 from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 from sklearn.inspection import permutation_importance
 
@@ -58,6 +59,8 @@ COMPLETION_BUFFER = timedelta(hours=3)
 # window) before it falls back to the save-and-stop behavior.
 RATE_LIMIT_WAIT_SECS = 600
 RATE_LIMIT_MAX_WAITS = 8
+TRANSIENT_LOAD_RETRY_SECS = 30
+TRANSIENT_LOAD_MAX_RETRIES = 3
 
 # --- verbosity ---------------------------------------------------------------
 
@@ -321,6 +324,7 @@ def collect_season(year: int, schedule: pd.DataFrame, *, filename: str,
     rate_limited = False
     waits_left = RATE_LIMIT_MAX_WAITS
     for rn, name in todo:
+        retries_left = TRANSIENT_LOAD_MAX_RETRIES
         while True:
             vprint(1, f"  fetching round {rn:>2}  {name} ...")
             try:
@@ -336,6 +340,17 @@ def collect_season(year: int, schedule: pd.DataFrame, *, filename: str,
                 print(f"  API rate limit reached (500 calls/hour) — waiting "
                       f"{rate_limit_wait // 60} min, then retrying round {rn:>2} ...")
                 time.sleep(rate_limit_wait)
+            except (DataNotLoadedError, RequestException) as exc:
+                if retries_left <= 0:
+                    print(f"  round {rn:>2} ({name}) skipped after transient load "
+                      f"failures: {type(exc).__name__}: {exc}")
+                    frame = None
+                    break
+                retries_left -= 1
+                print(f"  transient load failure ({type(exc).__name__}) — "
+                      f"retrying round {rn:>2} in {TRANSIENT_LOAD_RETRY_SECS}s "
+                      f"({retries_left} retries left) ...")
+                time.sleep(TRANSIENT_LOAD_RETRY_SECS)
             except Exception as exc:
                 print(f"  round {rn:>2} ({name}) skipped: {type(exc).__name__}: {exc}")
                 frame = None

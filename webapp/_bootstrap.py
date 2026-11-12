@@ -43,7 +43,7 @@ _STAMP_ATTR = "_src_stamp"
 # complete chain — whichever page runs first after a code pull heals the
 # process for all of them.
 MODULES = ("f1_common", "predict_race", "predict_grid", "predict_extras",
-           "predict_championship", "webapp_common")
+           "predict_championship", "predict_fantasy", "webapp_common")
 
 
 def _stamp(module):
