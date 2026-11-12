@@ -389,7 +389,7 @@ round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_ra
 18,United States Grand Prix,43,COL,Alpine F1 Team,20.0,95.722,21.0,0.0,Retired,,,,,,,1.6869999999999976
 18,United States Grand Prix,44,HAM,Ferrari,5.0,94.311,4.0,12.0,Finished,,,,,,,0.2760000000000104
 18,United States Grand Prix,5,BOR,Audi,21.0,95.632,13.0,0.0,Lapped,,,,,,,1.5970000000000084
-18,United States Grand Prix,55,SAI,Williams,16.0,96.77,18.0,0.0,Lapped,,,,,,,2.7349999999999994
+18,United States Grand Prix,55,SAI,Williams,16.0,96.77,18.0,0.0,Lapped,,,,,,,2.734999999999999
 18,United States Grand Prix,6,HAD,Red Bull,3.0,94.25,6.0,8.0,Finished,,,,,,,0.2150000000000034
 18,United States Grand Prix,63,RUS,Mercedes,6.0,94.305,8.0,4.0,Finished,,,,,,,0.2700000000000102
 18,United States Grand Prix,77,BOT,Cadillac F1 Team,19.0,97.523,20.0,0.0,Retired,,,,,,,3.4879999999999995
@@ -432,7 +432,7 @@ round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_ra
 20,São Paulo Grand Prix,43,COL,Alpine F1 Team,,,13.0,0.0,Lapped,,,,,,,
 20,São Paulo Grand Prix,44,HAM,Ferrari,,,9.0,2.0,Lapped,,,,,,,
 20,São Paulo Grand Prix,5,BOR,Audi,,,16.0,0.0,Lapped,,,,,,,
-20,São Paulo Grand Prix,51,nan,Haas F1 Team,,,20.0,0.0,Lapped,,,,,,,
+20,São Paulo Grand Prix,51,,Haas F1 Team,,,20.0,0.0,Lapped,,,,,,,
 20,São Paulo Grand Prix,55,SAI,Williams,,,19.0,0.0,Lapped,,,,,,,
 20,São Paulo Grand Prix,6,HAD,Red Bull,,,3.0,15.0,Finished,,,,,,,
 20,São Paulo Grand Prix,63,RUS,Mercedes,,,4.0,12.0,Finished,,,,,,,
