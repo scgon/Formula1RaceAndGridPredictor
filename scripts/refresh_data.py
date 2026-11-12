@@ -59,7 +59,11 @@ def required_columns(kind):
 
 
 def missing_rounds(kind, year, schedule):
-    """Completed rounds of `year` that the pipeline's season CSV is missing.
+    """Completed rounds of `year` that the pipeline's season CSV is missing
+    or holds incompletely (a round fetched while the results provider was
+    still lagging — e.g. race results published before the qualifying
+    classification the grid column comes from — is re-fetched too: its
+    pipeline exposes a stale_rounds predicate).
     A CSV with an outdated schema counts as missing everything: it would be
     discarded and re-downloaded by collect_season anyway."""
     path = f1_common.DATA_DIR / CSV_NAMES[kind].format(year=year)
@@ -67,14 +71,20 @@ def missing_rounds(kind, year, schedule):
     if not completed:
         return []
     have = set()
+    frame = None
     if path.exists():
         frame = pd.read_csv(path, dtype={"driver_number": str})
         if "round" in frame.columns and required_columns(kind).issubset(frame.columns):
             have = set(frame["round"].unique())
         else:
             print(f"Season {year} {kind}: cached CSV has an outdated schema — regenerating")
-            have = set()
-    return sorted(completed - have)
+            frame = None
+    missing = sorted(completed - have)
+    stale = getattr(MODULES[kind], "stale_rounds", None)
+    if stale is not None and frame is not None and not frame.empty:
+        missing += [rn for rn in stale(frame)
+                    if rn in completed and rn not in missing]
+    return missing
 
 
 def refresh_team_colors(year, schedule):

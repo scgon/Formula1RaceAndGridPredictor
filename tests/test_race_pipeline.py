@@ -164,6 +164,22 @@ def test_train_model_requires_training_data():
         predict_race.train_model(features, target_round=1)
 
 
+def test_stale_rounds_flags_only_fully_gridless_rounds():
+    """A round the provider fetched before publishing its qualifying
+    classification carries race results with an all-NaN grid — flagged for
+    re-fetch; a round with any grid value at all is not."""
+    frame = _raw_season(rounds=2)
+    frame.loc[frame["round"] == 2, "grid"] = np.nan  # provider-lag round
+    assert predict_race.stale_rounds(frame) == [2]
+
+    partially = frame.copy()
+    partially.loc[partially.index[-1], "grid"] = 4.0  # one grid value counts
+    assert predict_race.stale_rounds(partially) == []
+    assert predict_race.stale_rounds(_raw_season(rounds=2)) == []
+    assert predict_race.stale_rounds(frame.drop(columns=["grid"])) == []
+    assert predict_race.stale_rounds(pd.DataFrame(columns=["round", "grid"])) == []
+
+
 def test_podium_points_scoring():
     assert predict_race.podium_points(["A", "B", "C"], ["A", "B", "C"]) == 45
     assert predict_race.podium_points(["A", "B", "C"], ["A", "X", "B"]) == 20

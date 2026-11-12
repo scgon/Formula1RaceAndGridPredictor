@@ -233,6 +233,19 @@ def load_upcoming_round_checked(year, round_number, event_name, fallback):
     return upcoming, "pre"
 
 
+def stale_rounds(cached):
+    """Cached rounds whose grid is entirely missing — the results provider
+    can publish race results hours before the qualifying classification the
+    grid column is derived from, and a round fetched in that window is saved
+    incomplete: the gain model has no grid to anchor to. collect_season
+    re-fetches flagged rounds on the next run (its keep="last" merge lets
+    the re-fetched rows replace the stale ones)."""
+    if cached.empty or "grid" not in cached.columns:
+        return []
+    has_grid = cached.groupby("round")["grid"].apply(lambda s: s.notna().any())
+    return sorted(int(rn) for rn in has_grid[~has_grid].index)
+
+
 def collect_season(year, schedule, refresh=False, rate_limit_wait=None):
     return common.collect_season(
         year, schedule,
@@ -242,6 +255,7 @@ def collect_season(year, schedule, refresh=False, rate_limit_wait=None):
         load_round=load_completed_round,
         refresh=refresh,
         rate_limit_wait=rate_limit_wait,
+        stale_rounds=stale_rounds,
     )
 
 

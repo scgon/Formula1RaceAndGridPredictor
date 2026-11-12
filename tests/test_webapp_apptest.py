@@ -31,7 +31,7 @@ SEASON_CSV = {"race_target": "season_{year}.csv",
 
 def _completed_target_label(at, key):
     """Label of the newest round a Run can actually resolve: completed on
-    the calendar AND present in the bundled season CSV.
+    the calendar AND fully present in the bundled season CSV.
 
     A round counts as completed 3 hours after its race start, but the data
     providers lag behind the session — race results reach the results API
@@ -42,18 +42,28 @@ def _completed_target_label(at, key):
     which would fail the suite for no code reason; pinning to the CSV
     keeps the Run resolving from the tracked data alone. Round 1 can never
     be predicted (no training data before it) — the later the round, the
-    more fully-trained the backtest it exercises."""
+    more fully-trained the backtest it exercises.
+
+    A round can also be present but INCOMPLETE: the provider can publish
+    race results before the qualifying classification, leaving the race
+    CSV's grid all-NaN for that round (the gain model has nothing to
+    anchor to — collect_season re-fetches such rounds on the next run).
+    The race page therefore pins to the newest round with a grid."""
     kind = key.removesuffix("_target")
     year = int(at.sidebar.selectbox(key=f"{kind}_season").value)
     path = REPO_ROOT / "data" / SEASON_CSV[key].format(year=year)
     if not path.exists():
         pytest.skip(f"no bundled {kind} season CSV for {year} yet")
-    have = set(pd.read_csv(path, usecols=["round"])["round"])
+    frame = pd.read_csv(path, dtype={"driver_number": str})
+    have = set(frame["round"])
+    if kind == "race":
+        have = set(frame.loc[frame["grid"].notna(), "round"].unique()) & have
     labels = [o for o in at.sidebar.selectbox(key=key).options
               if "(completed)" in o]
     runnable = [o for o in labels if int(o.split()[1]) in have]
     if not runnable:
-        pytest.skip(f"no completed round of the {year} {kind} season is bundled yet")
+        pytest.skip(f"no fully-ingested completed round of the {year} {kind} "
+                    "season is bundled yet")
     return runnable[-1]
 
 

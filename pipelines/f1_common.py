@@ -293,7 +293,10 @@ def collect_season(year: int, schedule: pd.DataFrame, *, filename: str,
                    required_columns: Collection[str], result_column: str,
                    load_round: Callable[[int, int, str], pd.DataFrame],
                    refresh: bool = False,
-                   rate_limit_wait: float | None = None) -> pd.DataFrame:
+                   rate_limit_wait: float | None = None,
+                   stale_rounds: Callable[[pd.DataFrame],
+                                          Collection[int]] | None = None
+                   ) -> pd.DataFrame:
     """Fetch completed rounds into the season CSV, reusing whatever is cached.
 
     filename         CSV name pattern, e.g. "season_{year}.csv"
@@ -304,6 +307,15 @@ def collect_season(year: int, schedule: pd.DataFrame, *, filename: str,
                      rate limit (500 uncached calls/hour) is hit; None stops
                      after the limit instead, leaving the remaining rounds
                      for the next run (already fetched rounds stay in the CSV)
+    stale_rounds     optional callable cached-frame -> round numbers of
+                     INCOMPLETE cached rounds, re-fetched on every run: the
+                     results provider can lag one session behind another
+                     (e.g. race results published before the qualifying
+                     classification), and a round fetched in that window is
+                     saved partial and would otherwise never be re-fetched.
+                     The merge dedupes keep="last", so re-fetched rows
+                     replace the cached ones; a skipped re-fetch (rate
+                     limit, load failure) leaves the cached rows in place.
     """
     path = DATA_DIR / filename.format(year=year)
     completed = completed_rounds(schedule)
@@ -318,7 +330,17 @@ def collect_season(year: int, schedule: pd.DataFrame, *, filename: str,
     have = set(cached["round"].unique()) if cached is not None else set()
 
     todo = [(rn, name) for rn, name in completed if rn not in have]
-    print(f"Season {year}: {len(completed)} completed rounds ({len(have)} cached, {len(todo)} to fetch)")
+    refetching: list[tuple[int, str]] = []
+    if cached is not None and stale_rounds is not None and not cached.empty:
+        completed_numbers = {rn for rn, _ in completed}
+        refetching = [(rn, name) for rn, name in completed
+                      if int(rn) in {int(s) for s in stale_rounds(cached)}]
+        if refetching:
+            print(f"Season {year}: re-fetching {len(refetching)} incomplete "
+                  f"cached round(s): {[rn for rn, _ in refetching]}")
+    todo += refetching
+    print(f"Season {year}: {len(completed)} completed rounds ({len(have)} cached, "
+          f"{len(todo)} to fetch)")
 
     frames = []
     rate_limited = False

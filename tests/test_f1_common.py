@@ -464,3 +464,70 @@ def test_collect_season_retries_transient_load_failures(
     assert calls == 2
     assert sorted(data["round"].unique()) == [1]
     assert "retrying round" in capsys.readouterr().out
+
+
+def test_collect_season_refetches_an_incomplete_cached_round(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(f1_common, "DATA_DIR", tmp_path)
+    now = f1_common.utc_now()
+    schedule = pd.DataFrame([
+        _schedule_row(1, "One", now - timedelta(days=14)),
+        _schedule_row(2, "Two", now - timedelta(days=7)),
+    ])
+    # round 1 was fetched while the provider still lagged: race results are
+    # in, the grid the gain model anchors to is not
+    pd.DataFrame({
+        "round": [1, 1, 2, 2], "driver_number": ["1", "2", "1", "2"],
+        "driver": ["A", "B", "A", "B"], "finish": [1.0, 2.0, 2.0, 1.0],
+        "grid": [np.nan, np.nan, 1.0, 2.0],
+    }).to_csv(tmp_path / "season_2020.csv", index=False)
+
+    calls = []
+
+    def _load(year, rn, name):
+        calls.append(rn)
+        frame = _loader_frame(rn)
+        frame["grid"] = [1.0, 2.0] if rn == 1 else [2.0, 1.0]
+        return frame
+
+    def _stale(cached):
+        grouped = cached.groupby("round")["grid"].apply(lambda s: s.notna().any())
+        return sorted(int(rn) for rn in grouped[~grouped].index)
+
+    data = f1_common.collect_season(
+        2020, schedule, filename="season_{year}.csv",
+        required_columns=REQUIRED, result_column="finish", load_round=_load,
+        stale_rounds=_stale)
+
+    assert calls == [1]  # only the grid-less cached round is re-fetched
+    assert sorted(data["round"].unique()) == [1, 2]
+    assert len(data) == 4  # the re-fetched rows replaced the cached ones
+    assert data.loc[data["round"] == 1, "grid"].notna().all()
+    assert "re-fetching 1 incomplete" in capsys.readouterr().out
+
+
+def test_collect_season_keeps_cached_rows_when_the_refetch_fails(
+        monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(f1_common, "DATA_DIR", tmp_path)
+    now = f1_common.utc_now()
+    schedule = pd.DataFrame([_schedule_row(1, "One", now - timedelta(days=7))])
+    pd.DataFrame({
+        "round": [1, 1], "driver_number": ["1", "2"], "driver": ["A", "B"],
+        "finish": [1.0, 2.0], "grid": [np.nan, np.nan],
+    }).to_csv(tmp_path / "season_2020.csv", index=False)
+
+    def _boom(year, rn, name):
+        raise RateLimitExceededError("rate limit reached")
+
+    def _stale(cached):
+        return [1]
+
+    data = f1_common.collect_season(
+        2020, schedule, filename="season_{year}.csv",
+        required_columns=REQUIRED, result_column="finish", load_round=_boom,
+        stale_rounds=_stale)
+
+    # fail-soft: the incomplete cached rows survive the failed re-fetch
+    assert sorted(data["round"].unique()) == [1]
+    assert len(data) == 2
+    saved = pd.read_csv(tmp_path / "season_2020.csv")
+    assert len(saved) == 2
