@@ -32,8 +32,10 @@ st.title("F1 Fantasy: Team Optimizer & Budget Cap")
 st.caption("Predicts expected Formula 1 Fantasy points and uses integer knapsack optimization "
            "to select the **optimal team (5 drivers + 2 constructors + 1 DRS 2x booster)** "
            "under your chosen budget cap (official standard is **$100.0M**). "
-           "**Delta model**: predicts points above or below season form. "
-           "**Direct model**: predicts absolute fantasy points. "
+           "**Direct model**: predicts absolute fantasy points (drives the recommendation). "
+           "**Delta model**: predicts points above or below season form (reported in parallel). "
+           "Both train on every bundled season before the target, so early-season rounds "
+           "inherit the level knowledge of completed seasons. "
            "**Pre-quali mode**: predictions are made from practice pace (FP1/FP2) and form "
            "before qualifying runs — ideal for locking lineups before the deadline.")
 
@@ -50,8 +52,10 @@ with st.sidebar:
     models = st.selectbox(
         "Model formulation", ["both", "delta", "direct"],
         format_func=lambda x: "Delta model (vs season form)" if x == "delta"
-        else ("Direct points model" if x == "direct" else "Both (Delta + Direct)"),
-        help="Delta model anchors to the driver's season scoring average; Direct models absolute points.")
+        else ("Direct points model" if x == "direct" else "Both (Direct + Delta)"),
+        help="Direct model (absolute points) drives the recommendation and backtest "
+             "under Both/Direct; the Delta model anchors to the driver's season "
+             "scoring average and is reported in parallel under Both.")
     schedule = wc.get_schedule(year)
     completed = wc.completed_round_numbers(schedule)
     selection = wc.target_selectbox(KIND, schedule, set(completed))

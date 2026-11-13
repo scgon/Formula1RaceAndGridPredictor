@@ -16,6 +16,7 @@ for _p in (REPO_ROOT, REPO_ROOT / "pipelines", REPO_ROOT / "webapp",
         sys.path.insert(0, str(_p))
 
 import f1_common
+import predict_fantasy
 
 
 @pytest.fixture(autouse=True)
@@ -25,4 +26,13 @@ def _isolated_model_cache(tmp_path):
     repo's real cache/models (the cache's own behavior is tested with this
     same module attribute in test_f1_common)."""
     f1_common.MODEL_CACHE_DIR = tmp_path / "models"
+    yield
+
+
+@pytest.fixture(autouse=True)
+def _no_history_pool():
+    """The fantasy pipeline's cross-season training pool reads the bundled
+    data/season_*.csv files; disable it so the suite stays offline and
+    trains only on the synthetic frames each test builds."""
+    predict_fantasy.HISTORY_POOL_SEASONS = ()
     yield
