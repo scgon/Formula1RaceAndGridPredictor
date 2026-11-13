@@ -198,17 +198,18 @@ def test_optimizer_never_returns_over_budget():
         )
 
 
-def _synthetic_season(rounds=4, per_round=10):
+def _synthetic_season(rounds=4, per_round=10, year=2024, teams=None):
     rows = []
     rng = np.random.RandomState(42)
     for rnd in range(1, rounds + 1):
         for i in range(per_round):
+            team = (teams(i, rnd) if teams else f"Team {i % 5 + 1}")
             rows.append({
                 "round": rnd,
                 "event": f"Round {rnd}",
                 "driver_number": str(i + 1),
                 "driver": f"D{i+1}",
-                "team": f"Team {i % 5 + 1}",
+                "team": team,
                 "grid": float(i + 1),
                 "quali_pos": float(i + 1),
                 "quali_delta": float(i * 0.1),
@@ -333,3 +334,80 @@ def test_fitted_model_cache_thread_through(monkeypatch, tmp_path):
     assert fits == []
     assert cached_used == used
     assert np.allclose(m1.predict(X), m2.predict(X))
+
+
+def test_canonical_team_merges_mid_season_rename():
+    """A constructor renamed mid-season keeps one team history: the renamed
+    half must inherit the franchise's form instead of starting from NaN."""
+    raw = _synthetic_season(
+        rounds=4, per_round=10,
+        teams=lambda i, rnd: ("AlphaTauri" if rnd <= 2 else "RB F1 Team")
+        if i % 5 == 0 else f"Team {i % 5 + 1}")
+    features = predict_fantasy.build_features(raw, year=2024)
+
+    renamed = features[(features["round"] >= 3) & (features["team"] == "Racing Bulls")]
+    assert not renamed.empty  # canonical name, not the raw entry-list name
+    assert renamed["team_fantasy_form_season"].notna().all()
+    # rounds 1-2 carried the old name but aggregate onto the same franchise
+    old = features[features["round"] == 2]
+    assert (old[old["driver_number"] == "1"]["team"] == "Racing Bulls").all()
+
+    # no raw entry-list name survives into the feature frame
+    assert "RB F1 Team" not in set(features["team"])
+    assert "AlphaTauri" not in set(features["team"])
+
+
+def test_constructor_bonus_falls_back_to_team_bonus_form():
+    """Without a known grid (pre-quali), the constructor projection estimates
+    the qualifying-progression bonus from the team's shifted bonus history
+    instead of a flat constant."""
+    rows = pd.DataFrame([
+        {"driver": "A1", "team": "T1", "pred_points": 20.0, "actual_points": np.nan,
+         "grid": np.nan, "team_bonus_form": 8.0},
+        {"driver": "A2", "team": "T1", "pred_points": 10.0, "actual_points": np.nan,
+         "grid": np.nan, "team_bonus_form": 8.0},
+        {"driver": "B1", "team": "T2", "pred_points": 15.0, "actual_points": np.nan,
+         "grid": np.nan},
+    ])
+    c_pred = predict_fantasy.predict_constructors_from_drivers(rows)
+    # T1: 8.0 mean progression bonus from history + 5.0 pit stop
+    assert c_pred.set_index("team").at["T1", "bonus"] == pytest.approx(13.0)
+    # T2 has no bonus history: flat 5.0 + 5.0 pit stop
+    assert c_pred.set_index("team").at["T2", "bonus"] == pytest.approx(10.0)
+
+
+def test_history_pool_and_round_keys(monkeypatch, tmp_path):
+    """The pool concatenates every bundled earlier season (featurized per
+    season, re-factorized as a whole), the fold key is season-unique, and
+    train_model trains on pool + in-season rows."""
+    monkeypatch.setattr(f1_common, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(predict_fantasy, "HISTORY_POOL_SEASONS", None)
+    for year in (2023, 2024):
+        raw = _synthetic_season(rounds=3, per_round=4)
+        raw.to_csv(tmp_path / f"season_{year}.csv", index=False)
+
+    pool = predict_fantasy.history_pool(2024)
+    assert set(pool["year"].unique()) == {2023}
+    assert len(pool) == 12
+    # team_id factorized over the whole pool, not per season
+    assert pool["team_id"].nunique() == 4
+
+    # cached until a source file changes
+    cached = predict_fantasy.history_pool(2024)
+    assert cached is pool
+
+    features = predict_fantasy.build_features(
+        _synthetic_season(rounds=3, per_round=4), year=2024)
+    model, train, used, _ = predict_fantasy.train_model(features, target_round=3, mode="direct")
+    # 12 pool rows (season 2023) + 8 in-season rows (rounds 1-2 of 2024)
+    assert len(train) == 20
+    keys = predict_fantasy._round_key(train)
+    assert len(np.unique(keys)) == 5  # 3 pool rounds + 2 earlier in-season rounds
+    assert predict_fantasy._train_rounds_count(train) == 5
+
+    # an empty pool setting disables the loader outright
+    monkeypatch.setattr(predict_fantasy, "HISTORY_POOL_SEASONS", ())
+    assert predict_fantasy.history_pool(2024).empty
+    # and a pool restricted to specific seasons only reads those
+    monkeypatch.setattr(predict_fantasy, "HISTORY_POOL_SEASONS", (2023,))
+    assert set(predict_fantasy.history_pool(2024)["year"].unique()) == {2023}

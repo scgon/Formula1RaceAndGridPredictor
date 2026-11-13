@@ -432,7 +432,9 @@ def make_classifier(categorical_features, profile="fast", tuned_params=None):
 def tune_hyperparameters(X: ArrayLike, y: ArrayLike, rounds: ArrayLike,
                          categorical_features: Sequence[int] | None = None,
                          n_iter: int = TUNE_N_ITER,
-                         random_state: int = TUNE_RANDOM_STATE) -> dict[str, int | float] | None:
+                         random_state: int = TUNE_RANDOM_STATE,
+                         max_splits: int | None = None,
+                         max_train_rounds: int | None = None) -> dict[str, int | float] | None:
     """Search TUNED_SEARCH_SPACE for the combination with the lowest
     cross-validated MAE on one model's training set.
 
@@ -441,13 +443,17 @@ def tune_hyperparameters(X: ArrayLike, y: ArrayLike, rounds: ArrayLike,
     errors are pooled across folds. Shipped defaults validate on every
     TUNE_STRIDE-th training round (strided leave-one-round-out) so the
     score reflects the whole training window rather than the regime of a
-    few recent rounds; setting TUNE_MAX_SPLITS to an int restricts
-    validation to that many recent rounds instead. The FAST_PARAMS
-    combination is always evaluated first and ties keep it. Because folds
-    are small, a candidate must beat the fast hyperparameters by at least
-    TUNE_MIN_IMPROVEMENT (relative MAE) before it is adopted — without
-    that margin the search would chase fold noise and could end up worse
-    out-of-sample than the fast profile.
+    few recent rounds; an explicit `max_splits` restricts validation to
+    that many most-recent rounds instead (one fold each), and an explicit
+    `max_train_rounds` bounds each fold's training set to that many
+    most-recent rounds before its validation round — together they keep
+    the search cost proportional when the training pool spans many
+    seasons (the final fit outside the tuner still sees every row). The
+    FAST_PARAMS combination is always evaluated first and ties keep it.
+    Because folds are small, a candidate must beat the fast
+    hyperparameters by at least TUNE_MIN_IMPROVEMENT (relative MAE) before
+    it is adopted — without that margin the search would chase fold noise
+    and could end up worse out-of-sample than the fast profile.
 
     Returns the winning parameter dict, or None when the training set
     covers fewer than two rounds (nothing to cross-validate) or no
@@ -458,7 +464,9 @@ def tune_hyperparameters(X: ArrayLike, y: ArrayLike, rounds: ArrayLike,
     y = np.asarray(y, dtype=float)
     rounds = np.asarray(rounds)
     unique = np.unique(rounds)
-    if TUNE_MAX_SPLITS is None:
+    if max_splits is not None:
+        val_rounds = unique[-min(max_splits, len(unique) - 1):]
+    elif TUNE_MAX_SPLITS is None:
         val_rounds = unique[1::TUNE_STRIDE]
     else:
         val_rounds = unique[-min(TUNE_MAX_SPLITS, len(unique) - 1):]
@@ -470,12 +478,17 @@ def tune_hyperparameters(X: ArrayLike, y: ArrayLike, rounds: ArrayLike,
     # the model simply ignores that feature in that fold.
     fold_sets = []
     for r in val_rounds:
-        X_train = X[rounds < r]
+        train_mask = rounds < r
+        if max_train_rounds is not None:
+            prior = np.unique(rounds[train_mask])
+            keep = prior[-min(max_train_rounds, len(prior)):]
+            train_mask = train_mask & np.isin(rounds, keep)
+        X_train = X[train_mask]
         all_nan = np.isnan(X_train).all(axis=0)
         if all_nan.any():
             X_train = X_train.copy()
             X_train[:, all_nan] = 0.0
-        fold_sets.append((X_train, y[rounds < r], X[rounds == r], y[rounds == r]))
+        fold_sets.append((X_train, y[train_mask], X[rounds == r], y[rounds == r]))
 
     keys = list(TUNED_SEARCH_SPACE)
     combos = list(product(*(TUNED_SEARCH_SPACE[key] for key in keys)))
@@ -521,20 +534,24 @@ def tune_hyperparameters(X: ArrayLike, y: ArrayLike, rounds: ArrayLike,
 
 
 def tune_classifier(X, y, rounds, categorical_features=None,
-                    n_iter=TUNE_N_ITER, random_state=TUNE_RANDOM_STATE):
+                    n_iter=TUNE_N_ITER, random_state=TUNE_RANDOM_STATE,
+                    max_splits=None, max_train_rounds=None):
     """Classifier twin of tune_hyperparameters: search TUNED_SEARCH_SPACE
     for the combination with the lowest pooled cross-validated log loss on
     one model's training set (same rolling folds, same seeded candidate
-    sampling, same minimum-improvement rule and fast-values fallback).
-    Folds whose training share contains a single class are skipped — a
-    classifier cannot be fit on them; when no fold is usable every
-    candidate ties at infinity and None (fast values) is returned.
+    sampling, same minimum-improvement rule and fast-values fallback, and
+    the same optional most-recent-rounds `max_splits` / `max_train_rounds`
+    restrictions). Folds whose training share contains a single class are
+    skipped — a classifier cannot be fit on them; when no fold is usable
+    every candidate ties at infinity and None (fast values) is returned.
     """
     X = np.asarray(X, dtype=float)
     y = np.asarray(y, dtype=float)
     rounds = np.asarray(rounds)
     unique = np.unique(rounds)
-    if TUNE_MAX_SPLITS is None:
+    if max_splits is not None:
+        val_rounds = unique[-min(max_splits, len(unique) - 1):]
+    elif TUNE_MAX_SPLITS is None:
         val_rounds = unique[1::TUNE_STRIDE]
     else:
         val_rounds = unique[-min(TUNE_MAX_SPLITS, len(unique) - 1):]
@@ -542,12 +559,17 @@ def tune_classifier(X, y, rounds, categorical_features=None,
         return None
     fold_sets = []
     for r in val_rounds:
-        X_train = X[rounds < r]
+        train_mask = rounds < r
+        if max_train_rounds is not None:
+            prior = np.unique(rounds[train_mask])
+            keep = prior[-min(max_train_rounds, len(prior)):]
+            train_mask = train_mask & np.isin(rounds, keep)
+        X_train = X[train_mask]
         all_nan = np.isnan(X_train).all(axis=0)
         if all_nan.any():
             X_train = X_train.copy()
             X_train[:, all_nan] = 0.0
-        fold_sets.append((X_train, y[rounds < r], X[rounds == r], y[rounds == r]))
+        fold_sets.append((X_train, y[train_mask], X[rounds == r], y[rounds == r]))
 
     keys = list(TUNED_SEARCH_SPACE)
     combos = list(product(*(TUNED_SEARCH_SPACE[key] for key in keys)))
@@ -642,11 +664,13 @@ def apply_model_cache(args):
     set_model_cache(getattr(args, "model_cache", True))
 
 
-def _model_cache_key(tag, X, target, rounds, profile, categorical, classifier):
+def _model_cache_key(tag, X, target, rounds, profile, categorical, classifier,
+                     tune_max_splits=None, tune_max_train_rounds=None):
     """sha256 over everything that determines the fitted model: the exact
     bytes of the arrays it is fit on, the tag naming the pipeline lane, the
     profile, the estimator kind, the categorical column indices, the
-    hyperparameter sources and the sklearn version."""
+    hyperparameter sources, the optional per-call tuner window bounds and
+    the sklearn version."""
     h = hashlib.sha256()
     h.update(f"sklearn={sklearn.__version__}".encode())
     h.update(f"|tag={tag}|profile={profile}|classifier={classifier}".encode())
@@ -657,6 +681,10 @@ def _model_cache_key(tag, X, target, rounds, profile, categorical, classifier):
     h.update(f"|params={sorted(fast_params.items())}".encode())
     h.update(f"|search={sorted(TUNED_SEARCH_SPACE.items())}".encode())
     h.update(f"|tune={tune_config}".encode())
+    if tune_max_splits is not None:
+        h.update(f"|tune_max_splits={tune_max_splits}".encode())
+    if tune_max_train_rounds is not None:
+        h.update(f"|tune_max_train_rounds={tune_max_train_rounds}".encode())
     for array in (X, target, rounds):
         h.update(b"|")
         h.update(np.ascontiguousarray(np.asarray(array)).tobytes())
@@ -712,7 +740,8 @@ def _prune_model_cache():
 
 
 def train_or_load(tag, X, target, rounds, *, profile="fast",
-                  categorical_features=None, classifier=False):
+                  categorical_features=None, classifier=False,
+                  tune_max_splits=None, tune_max_train_rounds=None):
     """Fit one model — or reuse the identical model fitted by a previous
     run. The single choke point every pipeline fit goes through: the only
     place models are tuned, created and fitted. Returns
@@ -737,11 +766,17 @@ def train_or_load(tag, X, target, rounds, *, profile="fast",
     categorical_features  indices of the categorical columns in X
     classifier selects the milestone pipeline's classifier twins of the
                factory and tuner
+    tune_max_splits  optional per-call tuner fold restriction (most-recent
+               rounds, one fold each); part of the cache key when set
+    tune_max_train_rounds  optional per-call bound on each fold's training
+               set (most-recent rounds before its validation round); part
+               of the cache key when set
     """
     if profile not in MODEL_PROFILES:
         raise ValueError(f"unknown model profile: {profile!r}")
     categorical = list(categorical_features) if categorical_features else []
-    key = _model_cache_key(tag, X, target, rounds, profile, categorical, classifier)
+    key = _model_cache_key(tag, X, target, rounds, profile, categorical, classifier,
+                           tune_max_splits, tune_max_train_rounds)
     entry = _load_cached_model(key)
     if entry is not None:
         vprint(2, f"  model cache: reusing fitted {tag} model")
@@ -749,7 +784,9 @@ def train_or_load(tag, X, target, rounds, *, profile="fast",
     tuned = None
     if profile == "optimized":
         tuner = tune_classifier if classifier else tune_hyperparameters
-        tuned = tuner(X, target, rounds, categorical_features=categorical or None)
+        tuned = tuner(X, target, rounds, categorical_features=categorical or None,
+                      max_splits=tune_max_splits,
+                      max_train_rounds=tune_max_train_rounds)
     model = (make_classifier(categorical, profile, tuned) if classifier
              else make_model(categorical, profile, tuned))
     model.fit(X, target)

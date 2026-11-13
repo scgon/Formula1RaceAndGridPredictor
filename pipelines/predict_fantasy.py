@@ -11,6 +11,13 @@ Runs in three modes:
 - "prequali": predicts before qualifying (uses practice pace FP1/FP2, sprint
   sessions, and season form — ideal for locking lineups before the deadline).
 
+Both model lanes (direct = absolute points, delta = points vs season form)
+train on the current season plus every bundled earlier season
+(history_pool), and team features aggregate on franchise-level constructor
+names (canonical_team) so mid-season renames do not split a team's history.
+With both lanes requested the recommendation and backtest come from the
+direct lane (see final_predictions).
+
 Shared machinery lives in f1_common.py.
 """
 
@@ -32,6 +39,18 @@ import predict_race as race
 
 MIN_TRAIN_ROUNDS = common.MIN_TRAIN_ROUNDS
 DEFAULT_BUDGET = 100.0
+
+# Optimized profile: the hyperparameter tuner validates on the most recent
+# training rounds only, and each fold trains on a bounded recent window.
+# With the cross-season history pool the training set spans ~200 rounds,
+# and a full strided walk over pool-sized folds would make every tuned fit
+# run thousands of large models (~85 min per CLI run measured); validating
+# on the 4 most recent rounds, each trained on the 40 most recent ones,
+# keeps the search proportional (~minutes) while still scoring candidates
+# on the regime the live prediction actually faces. The final fits outside
+# the tuner always train on the full pool.
+FANTASY_TUNE_MAX_SPLITS = 4
+FANTASY_TUNE_MAX_TRAIN_ROUNDS = 40
 
 PRACTICE_BUFFER = timedelta(hours=2)
 PRACTICE_SESSIONS = ("FP1", "FP2", "FP3")
@@ -72,6 +91,35 @@ def is_finished_like(status: Any) -> bool:
     text = str(status)
     return (text in ("Finished", "Lapped", "Disqualified")
             or text.startswith("+"))
+
+
+# Constructor renames are pure rebrands: fastf1 keeps using whichever name the
+# entry list carried, so a team renamed mid-season (Red Bull Racing -> Red Bull,
+# Racing Bulls -> RB F1 Team, ... — three constructors changed name at round 16
+# of 2026) would split its team-round history, its team_id category and its
+# constructor projections across two names. Feature aggregation therefore runs
+# on one canonical name per franchise (the current-era name); the stored `team`
+# column of the season CSVs is left untouched.
+TEAM_CANONICAL_OF = {
+    "Red Bull Racing": "Red Bull",
+    "Renault": "Alpine",
+    "Alpine F1 Team": "Alpine",
+    "Toro Rosso": "Racing Bulls",
+    "AlphaTauri": "Racing Bulls",
+    "RB F1 Team": "Racing Bulls",
+    "Sauber": "Audi",
+    "Alfa Romeo": "Audi",
+    "Alfa Romeo Racing": "Audi",
+    "Kick Sauber": "Audi",
+    "Force India": "Aston Martin",
+    "Racing Point": "Aston Martin",
+    "Cadillac F1 Team": "Cadillac",
+}
+
+
+def canonical_team(name: Any) -> str:
+    """The franchise-level constructor name used for feature aggregation."""
+    return TEAM_CANONICAL_OF.get(str(name), str(name))
 
 
 # ---------------------------------------------------------------------------
@@ -298,6 +346,7 @@ def _official_constructor_price(name: str, prices: Dict[str, float]) -> Optional
         return prices[name]
     aliases = {
         "Red Bull": "Red Bull Racing",
+        "Cadillac": "Cadillac F1 Team",
         "RB F1 Team": "Racing Bulls",
         "AlphaTauri": "Racing Bulls",
         "Toro Rosso": "Racing Bulls",
@@ -605,6 +654,9 @@ def build_features(data: pd.DataFrame, year: Optional[int] = None) -> pd.DataFra
         df["year"] = datetime.now().year
 
     df["driver_number"] = df["driver_number"].astype(str)
+    # Aggregate team history on franchise-level names so a mid-season
+    # constructor rename does not split a team's form in two.
+    df["team"] = df["team"].map(canonical_team)
     df = df.sort_values(["round", "driver_number"]).reset_index(drop=True)
 
     # Ground truth fantasy points
@@ -634,19 +686,36 @@ def build_features(data: pd.DataFrame, year: Optional[int] = None) -> pd.DataFra
     # second driver of each team (the rows are sorted by round and driver).
     team_round = (df.groupby(["team", "round"], sort=False)
                     .agg(team_fantasy_round=("fantasy_points", "sum"),
-                         team_race_points=("points", "sum"))
+                         team_race_points=("points", "sum"),
+                         team_q3_count=("grid", lambda s: int((s <= 10).sum())),
+                         team_q2_count=("grid", lambda s: int((s <= 15).sum())),
+                         team_grid_known=("grid", lambda s: int(s.notna().any())))
                     .reset_index()
                     .sort_values(["team", "round"]))
+    # The qualifying-progression bonus the team actually earned this round
+    # (the same schedule the constructor projection estimates); unknown
+    # while the round's grid is unknown (upcoming pre-quali frames).
+    team_round["team_round_bonus"] = np.where(
+        team_round["team_grid_known"] == 0,
+        np.nan,
+        np.where(team_round["team_q3_count"] == 2, 10.0,
+                 np.where(team_round["team_q3_count"] == 1, 5.0,
+                          np.where(team_round["team_q2_count"] == 2, 3.0,
+                                   np.where(team_round["team_q2_count"] == 1, 1.0, -1.0)))),
+    )
     by_team_round = team_round.groupby("team", sort=False)
     team_round["team_fantasy_form_3"] = by_team_round["team_fantasy_round"].transform(
         lambda s: s.shift(1).rolling(3, min_periods=1).mean())
     team_round["team_fantasy_form_season"] = by_team_round["team_fantasy_round"].transform(
         lambda s: s.shift(1).expanding(min_periods=1).mean())
+    team_round["team_bonus_form"] = by_team_round["team_round_bonus"].transform(
+        lambda s: s.shift(1).expanding(min_periods=1).mean())
     team_round["team_points_before"] = by_team_round["team_race_points"].transform(
         lambda s: s.shift(1).cumsum()).fillna(0.0)
     team_history = team_round.set_index(["team", "round"])
     keys = pd.MultiIndex.from_frame(df[["team", "round"]])
-    for col in ("team_fantasy_form_3", "team_fantasy_form_season", "team_points_before"):
+    for col in ("team_fantasy_form_3", "team_fantasy_form_season",
+                "team_bonus_form", "team_points_before"):
         df[col] = team_history[col].reindex(keys).to_numpy()
 
     return df
@@ -659,12 +728,99 @@ def usable_features(frame: pd.DataFrame) -> List[str]:
 
 
 # ---------------------------------------------------------------------------
+# Cross-season training pool
+# ---------------------------------------------------------------------------
+
+# Earlier bundled seasons whose data the fantasy models train on, on top of
+# the current season's rounds before the target. None (the default) uses
+# every bundled season before the target year; an empty tuple disables the
+# pool. A mid-season snapshot cannot know its own season's outcomes, so —
+# exactly like the championship pipeline — the pool teaches the models the
+# general grid/form -> fantasy-points mapping from seasons whose finales are
+# already known, which is what the first backtest rounds (trained on only
+# ~5 in-season rounds) need most. tests/conftest.py disables the pool so the
+# suite stays offline and trains on synthetic data only.
+HISTORY_POOL_SEASONS: Optional[Tuple[int, ...]] = None
+
+_HISTORY_POOL_CACHE: Dict[int, Tuple[Tuple[Tuple[str, float, int], ...], pd.DataFrame]] = {}
+
+
+def history_pool(year: int) -> pd.DataFrame:
+    """Feature frames of every bundled season before `year`, concatenated
+    into one training pool (empty when the pool is disabled or no earlier
+    season is bundled).
+
+    Each season is featurized on its own (its rolling windows never cross a
+    season boundary, mirroring how the live task sees a new season) and the
+    concatenated frame is re-factorized as a whole so `team_id` codes are
+    consistent across seasons. Cached per target year; the cache is stamped
+    with the source files' mtimes so a data refresh invalidates it.
+    """
+    if HISTORY_POOL_SEASONS is not None and not HISTORY_POOL_SEASONS:
+        return pd.DataFrame()
+    paths = []
+    for path in sorted(common.DATA_DIR.glob("season_*.csv")):
+        try:
+            season_year = int(path.stem.split("_")[1])
+        except (IndexError, ValueError):
+            continue
+        if season_year < year and (HISTORY_POOL_SEASONS is None
+                                   or season_year in HISTORY_POOL_SEASONS):
+            paths.append((path, season_year))
+    if not paths:
+        return pd.DataFrame()
+
+    stamp = tuple((str(path), path.stat().st_mtime, path.stat().st_size)
+                  for path, _y in paths)
+    cached = _HISTORY_POOL_CACHE.get(year)
+    if cached is not None and cached[0] == stamp:
+        return cached[1]
+
+    frames = []
+    for path, season_year in paths:
+        data = pd.read_csv(path, dtype={"driver_number": str})
+        if data.empty:
+            continue
+        feats = build_features(data, year=season_year)
+        frames.append(feats)
+    if not frames:
+        pool = pd.DataFrame()
+    else:
+        pool = pd.concat(frames, ignore_index=True)
+        pool["team_id"] = pd.factorize(pool["team"])[0]
+    _HISTORY_POOL_CACHE[year] = (stamp, pool)
+    return pool
+
+
+def _round_key(frame: pd.DataFrame) -> np.ndarray:
+    """One comparable, season-unique fold key per round (the tuner's CV and
+    the fitted-model cache see rounds across seasons, where bare round
+    numbers would collide)."""
+    if "year" in frame.columns:
+        return (frame["year"].astype(int) * 1000 + frame["round"].astype(int)).to_numpy()
+    return frame["round"].to_numpy()
+
+
+def _train_rounds_count(train: pd.DataFrame) -> int:
+    """Unique (season, round) pairs — bare round numbers repeat across a
+    cross-season training pool."""
+    if "year" in train.columns:
+        return int(train[["year", "round"]].drop_duplicates().shape[0])
+    return int(train["round"].nunique())
+
+
+# ---------------------------------------------------------------------------
 # Model Training & Inference
 # ---------------------------------------------------------------------------
 
 def train_model(features: pd.DataFrame, target_round: int, mode: str = "delta",
                 profile: str = "fast") -> Tuple[Any, pd.DataFrame, List[str], Optional[Dict[str, Any]]]:
     """Fit one fantasy model on all rounds before `target_round`.
+
+    Training rows come from the current season plus the bundled earlier
+    seasons (history_pool) — the models learn the general grid/form ->
+    fantasy-points mapping from completed seasons instead of only a handful
+    of in-season rounds.
 
     Returns (model, train_frame, used_features, tuned_hyperparameters).
     All fits go through f1_common.train_or_load.
@@ -675,6 +831,12 @@ def train_model(features: pd.DataFrame, target_round: int, mode: str = "delta",
     ]
     if train.empty:
         raise ValueError(f"no training data before round {target_round}")
+
+    pool = history_pool(int(features["year"].iloc[0]) if "year" in features.columns else 0)
+    if not pool.empty:
+        pool = pool[pool["fantasy_points"].notna()]
+        if not pool.empty:
+            train = pd.concat([pool, train], ignore_index=True)
 
     if mode == "delta":
         baseline = train["driver_fantasy_form_season"].fillna(train["fantasy_points"])
@@ -687,8 +849,10 @@ def train_model(features: pd.DataFrame, target_round: int, mode: str = "delta",
     categorical = [used.index("team_id")] if "team_id" in used else None
 
     model, tuned = common.train_or_load(
-        f"fantasy:{mode}", X, target, train["round"].to_numpy(),
-        profile=profile, categorical_features=categorical
+        f"fantasy:{mode}", X, target, _round_key(train),
+        profile=profile, categorical_features=categorical,
+        tune_max_splits=FANTASY_TUNE_MAX_SPLITS,
+        tune_max_train_rounds=FANTASY_TUNE_MAX_TRAIN_ROUNDS,
     )
     return model, train, used, tuned
 
@@ -725,12 +889,16 @@ def predict_constructors_from_drivers(driver_preds: pd.DataFrame) -> pd.DataFram
         d_pred_sum = grp["pred_points"].sum()
         act_sum = grp["actual_points"].sum() if grp["actual_points"].notna().all() else np.nan
 
-        # Estimated qualifying progression bonus
+        # Estimated qualifying progression bonus: from the round's grid when
+        # it is known, otherwise from the team's shifted bonus history
+        # (its average progression bonus over the rounds before this one).
         grids = grp["grid"].dropna().tolist() if "grid" in grp else []
         if len(grids) == 2:
             q3_count = sum(1 for g in grids if g <= 10.0)
             q2_count = sum(1 for g in grids if g <= 15.0)
             bonus = 10.0 if q3_count == 2 else (5.0 if q3_count == 1 else (3.0 if q2_count == 2 else 0.0))
+        elif "team_bonus_form" in grp and pd.notna(grp["team_bonus_form"].iloc[0]):
+            bonus = float(grp["team_bonus_form"].iloc[0])
         else:
             bonus = 5.0  # general expectation
 
@@ -799,8 +967,11 @@ def backtest_records(features: pd.DataFrame, min_train_rounds: int = MIN_TRAIN_R
         dream_opt = optimize_team(actual_df, c_act_df, d_prices, c_prices, budget=budget, top_k=1)
         dream_act = dream_opt["optimal"]["actual_points"]
 
-        # Train model(s)
-        train_mode = "direct" if models == "direct" else "delta"
+        # Train model(s). With both lanes requested the direct model drives
+        # the backtest and the recommendation: with the cross-season pool
+        # the absolute-points lane measures better than the anchored delta
+        # lane (see final_predictions).
+        train_mode = "direct" if models in ("both", "direct") else "delta"
         model, train_df, used, _ = train_model(features, target_round, mode=train_mode, profile=profile)
 
         d_pred = predict_drivers(model, features, target_round, mode=train_mode, use_features=used)
@@ -831,7 +1002,7 @@ def backtest_records(features: pd.DataFrame, min_train_rounds: int = MIN_TRAIN_R
             "budget_used": model_opt["optimal"]["cost"],
             "mae": mae,
             "rank_corr": corr,
-            "train_rounds": int(train_df["round"].nunique()),
+            "train_rounds": _train_rounds_count(train_df),
         })
 
     return records
@@ -840,7 +1011,15 @@ def backtest_records(features: pd.DataFrame, min_train_rounds: int = MIN_TRAIN_R
 def final_predictions(features: pd.DataFrame, target_round: int, profile: str = "fast",
                       models: str = "both", budget: float = DEFAULT_BUDGET,
                       year: Optional[int] = None) -> Dict[str, Any]:
-    """Fit final models and compute recommended team and alternatives."""
+    """Fit final models and compute recommended team and alternatives.
+
+    With both lanes requested the recommendation (roster, boards, dream-team
+    review) comes from the **direct** model: across the 2021-2026 rolling
+    backtests the absolute-points lane trained on the cross-season pool
+    captures more of the dream team than the anchored delta lane, whose
+    season-form anchor adds little once the pool already carries level
+    information. The delta model still trains and reports in parallel.
+    """
     if models not in ("both", "delta", "direct"):
         raise ValueError(f"unknown fantasy model selection: {models!r}")
     if year is None:
@@ -875,10 +1054,11 @@ def final_predictions(features: pd.DataFrame, target_round: int, profile: str = 
                                    mode="direct", use_features=direct_features)
         c_direct = predict_constructors_from_drivers(d_direct)
 
-    # Primary chosen model
-    primary_d = d_direct if models == "direct" else d_delta
-    primary_c = c_direct if models == "direct" else c_delta
-    main_mode = "direct" if models == "direct" else "delta"
+    # Primary chosen model: the direct lane drives the recommendation under
+    # both/direct (see the docstring); delta remains the explicit choice.
+    primary_d = d_direct if models in ("both", "direct") else d_delta
+    primary_c = c_direct if models in ("both", "direct") else c_delta
+    main_mode = "direct" if models in ("both", "direct") else "delta"
 
     team_opt = optimize_team(primary_d, primary_c, d_prices, c_prices, budget=budget, top_k=5)
 
@@ -918,7 +1098,7 @@ def final_predictions(features: pd.DataFrame, target_round: int, profile: str = 
         "d_board": d_board,
         "c_board": c_board,
         "train": train_df,
-        "train_rounds": int(train_df["round"].nunique()),
+        "train_rounds": _train_rounds_count(train_df),
         "delta_model": delta_model,
         "direct_model": direct_model,
         "delta_features": delta_features,
