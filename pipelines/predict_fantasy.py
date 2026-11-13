@@ -99,27 +99,14 @@ def is_finished_like(status: Any) -> bool:
 # of 2026) would split its team-round history, its team_id category and its
 # constructor projections across two names. Feature aggregation therefore runs
 # on one canonical name per franchise (the current-era name); the stored `team`
-# column of the season CSVs is left untouched.
-TEAM_CANONICAL_OF = {
-    "Red Bull Racing": "Red Bull",
-    "Renault": "Alpine",
-    "Alpine F1 Team": "Alpine",
-    "Toro Rosso": "Racing Bulls",
-    "AlphaTauri": "Racing Bulls",
-    "RB F1 Team": "Racing Bulls",
-    "Sauber": "Audi",
-    "Alfa Romeo": "Audi",
-    "Alfa Romeo Racing": "Audi",
-    "Kick Sauber": "Audi",
-    "Force India": "Aston Martin",
-    "Racing Point": "Aston Martin",
-    "Cadillac F1 Team": "Cadillac",
-}
+# column of the season CSVs is left untouched. The map itself lives in
+# f1_common, so every pipeline that aggregates by constructor agrees on it.
+TEAM_CANONICAL_OF = common.TEAM_CANONICAL_OF
 
 
 def canonical_team(name: Any) -> str:
     """The franchise-level constructor name used for feature aggregation."""
-    return TEAM_CANONICAL_OF.get(str(name), str(name))
+    return common.canonical_team(name)
 
 
 # ---------------------------------------------------------------------------

@@ -46,7 +46,7 @@ except Exception:
     st.caption("Race calendar unavailable (offline) — predictions still work from cached data.")
 
 # --- the pipelines ---------------------------------------------------------
-st.subheader("Five pipelines: race and qualifying order, championship, milestones, and fantasy")
+st.subheader("Six pipelines: race and qualifying order, custom races, championship, milestones, and fantasy")
 
 race_col, grid_col, champ_col, extras_col, fantasy_col = st.columns(5)
 
@@ -160,6 +160,15 @@ with fantasy_col:
             "legal rosters rather than greedily selecting points-per-million."
         )
     wc.page_link("webapp/page_fantasy.py", label="Open fantasy optimizer", icon=":material/stars:")
+
+st.divider()
+st.subheader(":material/tune: Custom race predictor")
+st.markdown(
+    "Design a hypothetical race by selecting a reference season, circuit and complete "
+    "qualifying order. The custom model predicts the finishing positions using the supplied "
+    "grid plus historical driver, team and circuit form; it does not require a live session."
+)
+wc.page_link("webapp/page_custom_race.py", label="Open custom race predictor", icon=":material/tune:")
 
 st.divider()
 

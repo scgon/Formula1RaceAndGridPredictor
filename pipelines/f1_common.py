@@ -46,6 +46,37 @@ DATA_DIR = BASE_DIR / "data"
 # a live fastf1 session for colors (see season_team_colors).
 TEAM_COLORS_CSV = DATA_DIR / "team_colors.csv"
 
+# ---------------------------------------------------------------------------
+# constructor names
+# ---------------------------------------------------------------------------
+
+# The season CSVs carry whichever entry-list name a round used, and a team
+# that renamed mid-season (three constructors changed name at round 16 of
+# 2026) would otherwise split its team-round history, its team_id category
+# and its constructor projections across two names. Feature aggregation
+# therefore runs on one canonical name per franchise (the current-era name);
+# the stored `team` column of the season CSVs is left untouched.
+TEAM_CANONICAL_OF = {
+    "Red Bull Racing": "Red Bull",
+    "Renault": "Alpine",
+    "Alpine F1 Team": "Alpine",
+    "Toro Rosso": "Racing Bulls",
+    "AlphaTauri": "Racing Bulls",
+    "RB F1 Team": "Racing Bulls",
+    "Sauber": "Audi",
+    "Alfa Romeo": "Audi",
+    "Alfa Romeo Racing": "Audi",
+    "Kick Sauber": "Audi",
+    "Force India": "Aston Martin",
+    "Racing Point": "Aston Martin",
+    "Cadillac F1 Team": "Cadillac",
+}
+
+
+def canonical_team(name) -> str:
+    """The franchise-level constructor name used for feature aggregation."""
+    return TEAM_CANONICAL_OF.get(str(name), str(name))
+
 MIN_TRAIN_ROUNDS = 5
 STINT_WINDOW = 5
 STINT_MIN_LAPS = 3

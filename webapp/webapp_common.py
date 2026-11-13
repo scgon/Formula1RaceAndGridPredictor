@@ -38,6 +38,7 @@ for _p in (_HERE, _HERE.parent / "pipelines"):
 
 import f1_common
 import predict_championship
+import predict_custom_race
 import predict_extras
 import predict_fantasy
 import predict_grid
@@ -45,8 +46,11 @@ import predict_race
 
 f1_common.setup()
 
+# The "custom" kind shares the race pipeline's CSV: the custom-race pipeline
+# trains on the bundled race seasons (it never downloads a session of its own).
 MODULES = {"race": predict_race, "grid": predict_grid, "extras": predict_extras,
-           "championship": predict_championship, "fantasy": predict_fantasy}
+           "championship": predict_championship, "fantasy": predict_fantasy,
+           "custom": predict_race}
 
 CURRENT_YEAR = datetime.now().year
 
@@ -238,7 +242,8 @@ def bundled_years(kind=None):
     covers seasons it was generated for, and its first collection also
     downloads race lap data). kind="championship" needs the race CSVs only
     (the championship pipeline reads those, deriving sprint points from
-    them — no data format of its own).
+    them — no data format of its own); kind="custom" reads the race CSVs
+    too — the custom-race pipeline designs a race from a bundled season.
 
     Selecting a bundled year never triggers a bulk season download — only
     rounds completed since the CSV snapshot (plus the upcoming round's
@@ -251,7 +256,7 @@ def bundled_years(kind=None):
             year = int(path.stem.split("_")[1])
         except (IndexError, ValueError):
             continue
-        if (kind in ("championship", "fantasy")
+        if (kind in ("championship", "fantasy", "custom")
                 or (f1_common.DATA_DIR / f"quali_season_{year}.csv").exists()):
             years.add(year)
     if kind == "extras":
@@ -692,9 +697,19 @@ def season_inputs(kind):
     back to the previous season's data (the same fallback the CLI uses).
     Nothing here executes the pipeline: the force checkbox only takes effect
     on the next Reload/Run press, and Reload refreshes the data layer only.
+
+    The custom-race kind is the exception: it designs a race from a bundled
+    season, so it offers the bundled seasons only — a season with no bundled
+    rounds has no race to design.
     """
     available = bundled_years(kind)
-    if available:
+    if available and kind == "custom":
+        options = sorted(available)
+        default = CURRENT_YEAR if CURRENT_YEAR in options else max(options)
+        help_text = ("Seasons with bundled historical data, kept current by a scheduled "
+                     "job. The custom race is designed from a bundled season — the "
+                     "rounds it actually visited are the circuits you can pick.")
+    elif available:
         options = sorted(set(available) | {max(available) + 1})
         default = CURRENT_YEAR if CURRENT_YEAR in options else max(options)
         help_text = ("Seasons with bundled historical data, kept current by a scheduled "

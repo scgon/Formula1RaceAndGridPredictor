@@ -20,6 +20,7 @@ championship = st.Page("webapp/page_championship.py", title="Championship predic
                        icon=":material/leaderboard:")
 extras = st.Page("webapp/page_extras.py", title="Milestones & extras", icon=":material/emoji_events:")
 fantasy = st.Page("webapp/page_fantasy.py", title="Fantasy optimizer", icon=":material/stars:")
+custom_race = st.Page("webapp/page_custom_race.py", title="Custom race", icon=":material/tune:")
 
-pg = st.navigation({"": [home], "Predictions": [race, quali, championship, extras, fantasy]})
+pg = st.navigation({"": [home], "Predictions": [race, quali, championship, extras, fantasy, custom_race]})
 pg.run()
