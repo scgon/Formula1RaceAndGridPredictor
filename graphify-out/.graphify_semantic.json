@@ -1,0 +1,776 @@
+{
+  "nodes": [
+    {
+      "id": "agents",
+      "label": "AGENTS.md",
+      "file_type": "document",
+      "node_kind": "page",
+      "source_file": "AGENTS.md",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "agents_agents_md",
+      "label": "AGENTS.md",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "AGENTS.md",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "agents_environment",
+      "label": "Environment",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "AGENTS.md",
+      "source_location": "L3",
+      "_origin": "ast"
+    },
+    {
+      "id": "agents_file_layout",
+      "label": "File layout",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "AGENTS.md",
+      "source_location": "L10",
+      "_origin": "ast"
+    },
+    {
+      "id": "agents_commands",
+      "label": "Commands",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "AGENTS.md",
+      "source_location": "L44",
+      "_origin": "ast"
+    },
+    {
+      "id": "agents_tests",
+      "label": "Tests",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "AGENTS.md",
+      "source_location": "L68",
+      "_origin": "ast"
+    },
+    {
+      "id": "agents_architecture",
+      "label": "Architecture",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "AGENTS.md",
+      "source_location": "L81",
+      "_origin": "ast"
+    },
+    {
+      "id": "agents_fastf1_gotchas",
+      "label": "fastf1 gotchas",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "AGENTS.md",
+      "source_location": "L115",
+      "_origin": "ast"
+    },
+    {
+      "id": "agents_determinism",
+      "label": "Determinism",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "AGENTS.md",
+      "source_location": "L125",
+      "_origin": "ast"
+    },
+    {
+      "id": "agents_web_app_verification",
+      "label": "Web app verification",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "AGENTS.md",
+      "source_location": "L132",
+      "_origin": "ast"
+    },
+    {
+      "id": "agents_notebook_verification",
+      "label": "Notebook verification",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "AGENTS.md",
+      "source_location": "L145",
+      "_origin": "ast"
+    },
+    {
+      "id": "agents_repo",
+      "label": "Repo",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "AGENTS.md",
+      "source_location": "L154",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme",
+      "label": "README.md",
+      "file_type": "document",
+      "node_kind": "page",
+      "source_file": "README.md",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme_formula_1_race_grid_predictor",
+      "label": "Formula 1 Race & Grid Predictor",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "README.md",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme_overview",
+      "label": "Overview",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "README.md",
+      "source_location": "L9",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme_important_project_files",
+      "label": "Important project files",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "README.md",
+      "source_location": "L21",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme_data_and_caching_model",
+      "label": "Data and caching model",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "README.md",
+      "source_location": "L65",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme_requirements",
+      "label": "Requirements",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "README.md",
+      "source_location": "L86",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme_running_the_project",
+      "label": "Running the project",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "README.md",
+      "source_location": "L104",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme_streamlit_app",
+      "label": "Streamlit app",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "README.md",
+      "source_location": "L106",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme_cli_pipelines",
+      "label": "CLI pipelines",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "README.md",
+      "source_location": "L123",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme_pipeline_architecture",
+      "label": "Pipeline architecture",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "README.md",
+      "source_location": "L188",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme_1_race_pipeline_pipelines_predict_race_py",
+      "label": "1) Race pipeline (`pipelines/predict_race.py`)",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "README.md",
+      "source_location": "L190",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme_2_grid_pipeline_pipelines_predict_grid_py",
+      "label": "2) Grid pipeline (`pipelines/predict_grid.py`)",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "README.md",
+      "source_location": "L206",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme_3_championship_pipeline_pipelines_predict_championship_py",
+      "label": "3) Championship pipeline (`pipelines/predict_championship.py`)",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "README.md",
+      "source_location": "L217",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme_4_milestone_pipeline_pipelines_predict_extras_py",
+      "label": "4) Milestone pipeline (`pipelines/predict_extras.py`)",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "README.md",
+      "source_location": "L231",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme_5_fantasy_optimizer_pipelines_predict_fantasy_py",
+      "label": "5) Fantasy optimizer (`pipelines/predict_fantasy.py`)",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "README.md",
+      "source_location": "L252",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme_model_profiles",
+      "label": "Model profiles",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "README.md",
+      "source_location": "L258",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme_feature_sets_and_project_logic",
+      "label": "Feature sets and project logic",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "README.md",
+      "source_location": "L273",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme_web_app_behavior",
+      "label": "Web app behavior",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "README.md",
+      "source_location": "L308",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme_tests_ci_and_verification",
+      "label": "Tests, CI and verification",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "README.md",
+      "source_location": "L340",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme_refresh_workflow_and_operational_notes",
+      "label": "Refresh workflow and operational notes",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "README.md",
+      "source_location": "L408",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme_future_work_backlog",
+      "label": "Future work / backlog",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "README.md",
+      "source_location": "L426",
+      "_origin": "ast"
+    },
+    {
+      "id": "readme_license",
+      "label": "License",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "README.md",
+      "source_location": "L440",
+      "_origin": "ast"
+    },
+    {
+      "id": "todo",
+      "label": "TODO.md",
+      "file_type": "document",
+      "node_kind": "page",
+      "source_file": "TODO.md",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "todo_todo_ideas",
+      "label": "TODO / Ideas",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "TODO.md",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "todo_modeling",
+      "label": "Modeling",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "TODO.md",
+      "source_location": "L3",
+      "_origin": "ast"
+    },
+    {
+      "id": "todo_data_features",
+      "label": "Data / features",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "TODO.md",
+      "source_location": "L16",
+      "_origin": "ast"
+    },
+    {
+      "id": "todo_web_app",
+      "label": "Web app",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "TODO.md",
+      "source_location": "L24",
+      "_origin": "ast"
+    },
+    {
+      "id": "todo_engineering",
+      "label": "Engineering",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "TODO.md",
+      "source_location": "L35",
+      "_origin": "ast"
+    },
+    {
+      "id": "todo_maybe_exploratory",
+      "label": "Maybe / exploratory",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "TODO.md",
+      "source_location": "L47",
+      "_origin": "ast"
+    }
+  ],
+  "edges": [
+    {
+      "source": "agents",
+      "target": "agents_agents_md",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "AGENTS.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "agents_agents_md",
+      "target": "agents_environment",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "AGENTS.md",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "agents_agents_md",
+      "target": "agents_file_layout",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "AGENTS.md",
+      "source_location": "L10",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "agents_agents_md",
+      "target": "agents_commands",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "AGENTS.md",
+      "source_location": "L44",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "agents_agents_md",
+      "target": "agents_tests",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "AGENTS.md",
+      "source_location": "L68",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "agents_agents_md",
+      "target": "agents_architecture",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "AGENTS.md",
+      "source_location": "L81",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "agents_agents_md",
+      "target": "agents_fastf1_gotchas",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "AGENTS.md",
+      "source_location": "L115",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "agents_agents_md",
+      "target": "agents_determinism",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "AGENTS.md",
+      "source_location": "L125",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "agents_agents_md",
+      "target": "agents_web_app_verification",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "AGENTS.md",
+      "source_location": "L132",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "agents_agents_md",
+      "target": "agents_notebook_verification",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "AGENTS.md",
+      "source_location": "L145",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "agents_agents_md",
+      "target": "agents_repo",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "AGENTS.md",
+      "source_location": "L154",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme",
+      "target": "readme_formula_1_race_grid_predictor",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme_formula_1_race_grid_predictor",
+      "target": "readme_overview",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L9",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme_formula_1_race_grid_predictor",
+      "target": "readme_important_project_files",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L21",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme_formula_1_race_grid_predictor",
+      "target": "readme_data_and_caching_model",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L65",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme_formula_1_race_grid_predictor",
+      "target": "readme_requirements",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L86",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme_formula_1_race_grid_predictor",
+      "target": "readme_running_the_project",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L104",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme_running_the_project",
+      "target": "readme_streamlit_app",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L106",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme_running_the_project",
+      "target": "readme_cli_pipelines",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L123",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme_formula_1_race_grid_predictor",
+      "target": "readme_pipeline_architecture",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L188",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme_pipeline_architecture",
+      "target": "readme_1_race_pipeline_pipelines_predict_race_py",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L190",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme_pipeline_architecture",
+      "target": "readme_2_grid_pipeline_pipelines_predict_grid_py",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L206",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme_pipeline_architecture",
+      "target": "readme_3_championship_pipeline_pipelines_predict_championship_py",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L217",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme_pipeline_architecture",
+      "target": "readme_4_milestone_pipeline_pipelines_predict_extras_py",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L231",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme_pipeline_architecture",
+      "target": "readme_5_fantasy_optimizer_pipelines_predict_fantasy_py",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L252",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme_formula_1_race_grid_predictor",
+      "target": "readme_model_profiles",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L258",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme_formula_1_race_grid_predictor",
+      "target": "readme_feature_sets_and_project_logic",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L273",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme_formula_1_race_grid_predictor",
+      "target": "readme_web_app_behavior",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L308",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme_formula_1_race_grid_predictor",
+      "target": "readme_tests_ci_and_verification",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L340",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme_formula_1_race_grid_predictor",
+      "target": "readme_refresh_workflow_and_operational_notes",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L408",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme_formula_1_race_grid_predictor",
+      "target": "readme_future_work_backlog",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L426",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme",
+      "target": "todo",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L438",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "readme_formula_1_race_grid_predictor",
+      "target": "readme_license",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L440",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "todo",
+      "target": "todo_todo_ideas",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "TODO.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "todo_todo_ideas",
+      "target": "todo_modeling",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "TODO.md",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "todo_todo_ideas",
+      "target": "todo_data_features",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "TODO.md",
+      "source_location": "L16",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "todo_todo_ideas",
+      "target": "todo_web_app",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "TODO.md",
+      "source_location": "L24",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "todo_todo_ideas",
+      "target": "todo_engineering",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "TODO.md",
+      "source_location": "L35",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "todo_todo_ideas",
+      "target": "todo_maybe_exploratory",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "TODO.md",
+      "source_location": "L47",
+      "weight": 1.0,
+      "_origin": "ast"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "failed_sources": [],
+  "skipped_sources": [],
+  "extracted_sources": [
+    "/Users/shaan/CodingProjects/PycharmProjects/Formula1RaceAndGridPredictor/AGENTS.md",
+    "/Users/shaan/CodingProjects/PycharmProjects/Formula1RaceAndGridPredictor/README.md",
+    "/Users/shaan/CodingProjects/PycharmProjects/Formula1RaceAndGridPredictor/TODO.md",
+    "/Users/shaan/CodingProjects/PycharmProjects/Formula1RaceAndGridPredictor/requirements-dev.txt",
+    "/Users/shaan/CodingProjects/PycharmProjects/Formula1RaceAndGridPredictor/requirements.txt"
+  ]
+}

@@ -78,6 +78,75 @@ Shared CLI flags: `--season YEAR`, `--predict-round N`, `--next` (next race/qual
 
 CI: `.github/workflows/tests.yml` runs the whole suite on pushes/PRs to main on a Python 3.12 + 3.14 matrix (data-refresh commits say `[skip ci]`, so they don't trigger it). Locally, `-m "not slow"` gives the ~15s offline subset.
 
+## graphify — Codebase Knowledge Graph
+
+**graphify** builds a persistent, queryable knowledge graph of the repository (AST + semantic extraction). It lives in `graphify-out/` and is committed to the repo so it survives across sessions and worktrees.
+
+### When to use it
+- You need to understand cross-file relationships (pipeline → f1_common, webapp → pipelines, etc.)
+- You're tracing a data flow or call chain across multiple modules
+- You want a high-level architectural map before making changes
+- You're debugging an import or dependency issue
+- The question is structural (communities, bridges, central abstractions)
+
+### Setup (one-time per machine)
+```bash
+PY=/opt/homebrew/Caskroom/miniconda/base/bin/python
+$PY -m pip install graphifyy -q
+```
+
+### Build / Update
+```bash
+# Full build (first time or after major restructure)
+/graphify .
+
+# Incremental update (after code changes)
+/graphify . --update
+
+# Force full rebuild (after deleting files)
+/graphify . --force
+```
+
+The graph auto-detects the repo root and stores outputs in `graphify-out/`:
+- `graph.json` — GraphRAG-ready JSON (nodes, edges, communities)
+- `GRAPH_REPORT.md` — Plain-language architecture report
+- `graph.html` — Interactive tree visualization (open in browser)
+
+### Querying
+```bash
+# Broad context (BFS traversal)
+/graphify query "How does the fitted-model cache work?"
+
+# Trace a specific path (DFS)
+/graphify query "Trace data flow from collect_season to final_predictions" --dfs
+
+# Shortest path between two concepts
+/graphify path "train_or_load" "predict_race"
+
+# Explain a node
+/graphify explain "backtest_records"
+```
+
+### Fast Path (Existing Graph)
+If `graphify-out/graph.json` exists and you ask a natural-language question about the codebase, the graph is queried directly — no rebuild needed. The graph is already built; use it.
+
+### What the Graph Captures
+- **34 communities** mapping to your modules: `predict_race`, `predict_grid`, `predict_championship`, `predict_extras`, `predict_fantasy`, `f1_common`, `webapp/*`, `tests/*`, `refresh_data`, CI workflows
+- **God nodes** (core abstractions): `train_or_load`, `backtest_records`, `final_predictions`, `session_utc`, `vprint`, each pipeline's `main()`
+- **Cross-community edges** (data flow): pipelines → `f1_common` (`setup`, `collect_season`, `train_or_load`, `vprint`); `refresh_data` → `predict_race` (`stale_rounds`); webapp → pipelines (`run_pipeline`, `backtest_records`, `final_predictions`)
+- **No import cycles detected**
+
+### Corpus Coverage
+- 36 code/docs files extracted (Python, YAML, Markdown)
+- 28 CSV/IPYNB data files not represented (no extractors for data formats)
+- ~64K words, 809 nodes, 1,560 edges
+
+### Tips
+- Commit `graphify-out/` so the graph persists across worktrees and sessions
+- Run `/graphify . --update` after significant refactors
+- Use `/graphify query` for questions; avoid re-extracting unless the codebase structure changed
+- The HTML viz (`graph.html`) is useful for onboarding — open it in a browser
+
 ## Architecture
 
 - `pipelines/f1_common.py` — shared machinery: fastf1 cache setup, UTC/session helpers (`utc_now`, `session_utc`, `completed_rounds`), quali-lap extraction (`best_quali_seconds`, `pole_seconds`), practice features (`practice_features(year, rnd, sessions)`), the season CSV cache (`collect_season`, parameterized by filename/columns/result column/loader, soft stop on the F1 API rate limit, optional `rate_limit_wait` sleep-and-retry), the model factories (regressor + classifier) and their hyperparameter tuners, the fitted-model cache (`train_or_load`, see below), `rank_corr`, permutation importance (`importance_scores`/`importance_report`) and the CLI verbosity gating (`VERBOSITY`, `vprint`, `add_verbosity_args`/`apply_verbosity`).
