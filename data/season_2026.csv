@@ -439,3 +439,25 @@ round,event,driver_number,driver,team,grid,quali_time,finish,points,status,fp_ra
 20,São Paulo Grand Prix,77,BOT,Cadillac F1 Team,17.0,93.774,22.0,0.0,Did not start,,,,,,,7.028999999999996
 20,São Paulo Grand Prix,81,PIA,McLaren,10.0,90.369,6.0,8.0,Finished,,,,,,,3.6239999999999952
 20,São Paulo Grand Prix,87,BEA,Haas F1 Team,6.0,89.13,17.0,0.0,Lapped,,,,,,,2.384999999999991
+21,Las Vegas Grand Prix,1,NOR,McLaren,3.0,94.244,2.0,18.0,Finished,,,,,,,0.3509999999999991
+21,Las Vegas Grand Prix,10,GAS,Alpine F1 Team,8.0,94.559,5.0,10.0,Finished,,,,,,,0.6659999999999968
+21,Las Vegas Grand Prix,11,PER,Cadillac F1 Team,16.0,97.383,21.0,0.0,Retired,,,,,,,3.489999999999995
+21,Las Vegas Grand Prix,12,ANT,Mercedes,6.0,93.893,4.0,12.0,Finished,,,,,,,0.0
+21,Las Vegas Grand Prix,14,ALO,Aston Martin,18.0,97.4,19.0,0.0,Retired,,,,,,,3.507000000000005
+21,Las Vegas Grand Prix,16,LEC,Ferrari,10.0,95.04,10.0,1.0,Finished,,,,,,,1.1470000000000056
+21,Las Vegas Grand Prix,18,STR,Aston Martin,21.0,97.55,17.0,0.0,Finished,,,,,,,3.6569999999999965
+21,Las Vegas Grand Prix,23,ALB,Williams,14.0,95.856,22.0,0.0,Did not start,,,,,,,1.9629999999999939
+21,Las Vegas Grand Prix,27,HUL,Audi,12.0,95.46,11.0,0.0,Finished,,,,,,,1.566999999999993
+21,Las Vegas Grand Prix,3,VER,Red Bull,1.0,94.151,1.0,25.0,Finished,,,,,,,0.25799999999999557
+21,Las Vegas Grand Prix,30,LAW,RB F1 Team,7.0,95.048,14.0,0.0,Finished,,,,,,,1.1550000000000011
+21,Las Vegas Grand Prix,41,LIN,RB F1 Team,5.0,94.668,20.0,0.0,Retired,,,,,,,0.7750000000000057
+21,Las Vegas Grand Prix,43,COL,Alpine F1 Team,9.0,94.982,6.0,8.0,Finished,,,,,,,1.0889999999999986
+21,Las Vegas Grand Prix,44,HAM,Ferrari,11.0,95.253,7.0,6.0,Finished,,,,,,,1.3599999999999994
+21,Las Vegas Grand Prix,5,BOR,Audi,13.0,95.993,12.0,0.0,Finished,,,,,,,2.0999999999999943
+21,Las Vegas Grand Prix,51,CAM,Haas F1 Team,15.0,96.22,16.0,0.0,Finished,,,,,,,2.326999999999998
+21,Las Vegas Grand Prix,55,SAI,Williams,20.0,95.588,8.0,4.0,Finished,,,,,,,1.6949999999999932
+21,Las Vegas Grand Prix,6,HAD,Red Bull,4.0,94.592,15.0,0.0,Finished,,,,,,,0.6989999999999981
+21,Las Vegas Grand Prix,63,RUS,Mercedes,2.0,94.224,9.0,2.0,Finished,,,,,,,0.33100000000000307
+21,Las Vegas Grand Prix,77,BOT,Cadillac F1 Team,19.0,97.601,18.0,0.0,Finished,,,,,,,3.7079999999999984
+21,Las Vegas Grand Prix,81,PIA,McLaren,17.0,94.763,3.0,15.0,Finished,,,,,,,0.8700000000000045
+21,Las Vegas Grand Prix,87,BEA,Haas F1 Team,22.0,108.005,13.0,0.0,Finished,,,,,,,14.111999999999995
